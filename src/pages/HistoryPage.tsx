@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
+import { Button } from "@/components/ui/button";
 function fmt(ts: number) {
   const d = new Date(ts);
   return d.toLocaleString();
@@ -24,11 +24,42 @@ export default function HistoryPage() {
     return JSON.parse(localStorage.getItem('ct_history') || '[]') as any[];
   }, []);
 
+  function toCsvValue(v: any) {
+    const s = String(v ?? "");
+    if (s.includes(";") || s.includes("\n") || s.includes('"')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  const exportCsv = () => {
+    const header = ["Datum","Filiale","Tätigkeit","Start","Ende","Pause(min)","Netto(HH:MM)"];
+    const rows = history.map((s: any) => [
+      new Date(s.start).toLocaleDateString(),
+      s.branch ?? "",
+      s.activity ?? "",
+      fmt(s.start),
+      s.end ? fmt(s.end) : "—",
+      Math.floor((s.pausedSeconds || 0) / 60),
+      dur(s)
+    ]);
+    const csv = [header, ...rows].map(r => r.map(toCsvValue).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `crafton-time-historie-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   return (
     <>
       <h1 className="sr-only">Historie – Crafton Time</h1>
       <section className="rounded-2xl border bg-card p-4">
-        <div className="mb-3 text-lg font-medium">Historie</div>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-lg font-medium">Historie</div>
+          <Button variant="secondary" onClick={exportCsv}>Export CSV</Button>
+        </div>
         <div className="w-full overflow-x-auto">
           <Table>
             <TableHeader>

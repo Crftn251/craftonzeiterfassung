@@ -1,8 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Play, Pause, Square, BarChart3, History, Settings, ShieldCheck, LogOut, Timer, Building2, Briefcase } from "lucide-react";
+import { BarChart3, History, Settings, ShieldCheck, LogOut, Timer, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
-
+import { useEffect, useState } from "react";
+import { getSupabase } from "@/lib/supabaseClient";
 const navItems = [
   { to: "/", label: "Tracken", icon: Timer },
   { to: "/profil", label: "Profil", icon: BarChart3 },
@@ -12,12 +12,27 @@ const navItems = [
 ];
 
 export default function AppShell() {
+  const supabase = getSupabase();
+  const [user, setUser] = useState<any>(null);
+
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
     const meta = document.querySelector('meta[name="description"]');
     if (meta) meta.setAttribute("content", "Tracke Arbeitszeiten schnell und DSGVO-konform. Timer, Pausen, Sessions, Analytics.");
   }, []);
 
+  useEffect(() => {
+    if (!supabase) return;
+    let sub: any;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user ?? null);
+      sub = supabase.auth.onAuthStateChange((_e, session) => {
+        setUser(session?.user ?? null);
+      });
+    })();
+    return () => sub?.data?.subscription?.unsubscribe?.();
+  }, [supabase]);
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -32,9 +47,17 @@ export default function AppShell() {
                 {label}
               </NavLink>
             ))}
-            <Button variant="ghost" className="ml-2">
-              <LogOut className="h-4 w-4 mr-2" /> Logout
-            </Button>
+            {user ? (
+              <Button variant="ghost" className="ml-2" onClick={() => supabase?.auth.signOut()}>
+                <LogOut className="h-4 w-4 mr-2" /> Logout
+              </Button>
+            ) : (
+              <NavLink to="/login" className="ml-2">
+                <Button variant="ghost">
+                  <LogIn className="h-4 w-4 mr-2" /> Login
+                </Button>
+              </NavLink>
+            )}
           </div>
         </div>
       </header>

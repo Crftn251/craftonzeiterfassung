@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { Button } from "@/components/ui/button";
 import { Building2, Briefcase } from "lucide-react";
 
@@ -34,18 +34,20 @@ export default function OnboardingWizard({
       {step === 1 && (
         <div className="grid gap-4">
           <h2 className="text-xl font-medium">Wo arbeitest du?</h2>
-          <Select value={branch} onValueChange={onChangeBranch}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filiale wählen" />
-            </SelectTrigger>
-            <SelectContent>
-              {branches.map((b) => (
-                <SelectItem key={b} value={b}>
-                  {b}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {branches.map((b) => (
+              <Button
+                key={b}
+                type="button"
+                variant={branch === b ? "default" : "outline"}
+                className="h-auto py-4 px-4 justify-center"
+                aria-pressed={branch === b}
+                onClick={() => onChangeBranch(b)}
+              >
+                {b}
+              </Button>
+            ))}
+          </div>
           <div className="flex justify-end">
             <Button onClick={() => setStep(2)} disabled={!branch}>
               Weiter
@@ -57,18 +59,20 @@ export default function OnboardingWizard({
       {step === 2 && (
         <div className="grid gap-4">
           <h2 className="text-xl font-medium">Was machst du?</h2>
-          <Select value={activity} onValueChange={onChangeActivity}>
-            <SelectTrigger>
-              <SelectValue placeholder="Tätigkeit wählen" />
-            </SelectTrigger>
-            <SelectContent>
-              {activities.map((a) => (
-                <SelectItem key={a} value={a}>
-                  {a}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {activities.map((a) => (
+              <Button
+                key={a}
+                type="button"
+                variant={activity === a ? "default" : "outline"}
+                className="h-auto py-4 px-4 justify-center"
+                aria-pressed={activity === a}
+                onClick={() => onChangeActivity(a)}
+              >
+                {a}
+              </Button>
+            ))}
+          </div>
           <div className="flex items-center justify-between">
             <Button variant="secondary" onClick={() => setStep(1)}>
               Zurück

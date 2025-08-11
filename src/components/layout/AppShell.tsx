@@ -1,8 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { BarChart3, History, Settings, ShieldCheck, LogOut, Timer, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabaseClient";
+import { toast } from "@/components/ui/use-toast";
 const navItems = [
   { to: "/", label: "Tracken", icon: Timer },
   { to: "/profil", label: "Profil", icon: BarChart3 },
@@ -14,6 +17,8 @@ const navItems = [
 export default function AppShell() {
   const supabase = getSupabase();
   const [user, setUser] = useState<any>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
@@ -33,6 +38,28 @@ export default function AppShell() {
     })();
     return () => sub?.data?.subscription?.unsubscribe?.();
   }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    setLoginOpen(user === null);
+  }, [supabase, user]);
+
+  const sendMagicLink = async (e: any) => {
+    e.preventDefault();
+    if (!supabase) {
+      toast({ title: "Konfiguration erforderlich", description: "Bitte Supabase URL & Anon Key unter Einstellungen speichern.", variant: "destructive" as any });
+      return;
+    }
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+    if (error) {
+      toast({ title: "Login fehlgeschlagen", description: error.message, variant: "destructive" as any });
+    } else {
+      toast({ title: "E-Mail gesendet", description: "Prüfe dein Postfach für den Magic Link." });
+      setEmail("");
+      setLoginOpen(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -65,6 +92,31 @@ export default function AppShell() {
       <main className="container py-6">
         <Outlet />
       </main>
+
+      {supabase && (
+        <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Anmeldung</DialogTitle>
+              <DialogDescription>
+                Melde dich mit deiner E‑Mail an. Wir senden dir einen Magic Link.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={sendMagicLink} className="grid gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm text-muted-foreground">E‑Mail</label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="du@example.com" />
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <DialogClose asChild>
+                  <Button type="button" variant="secondary">Später</Button>
+                </DialogClose>
+                <Button type="submit">Magic Link senden</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Bottom Nav on mobile */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur md:hidden">

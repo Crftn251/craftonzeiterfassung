@@ -10,6 +10,7 @@ import HistoryPage from "./pages/HistoryPage";
 import SettingsPage from "./pages/SettingsPage";
 import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="historie" element={<HistoryPage />} />
             <Route path="einstellungen" element={<SettingsPage />} />
             <Route path="admin" element={<AdminPage />} />
+            <Route path="login" element={<Login />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

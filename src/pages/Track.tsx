@@ -134,7 +134,7 @@ export default function Track() {
   const showWizard = (!branch || !activity) && !session;
 
   return (
-    <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-[1fr,420px]">
+    <section className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-[1fr,420px]">
       {offline && (
         <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-secondary">
           <div className="flex items-center gap-2"><WifiOff className="h-4 w-4" /> Offline – Timer läuft serverseitig weiter (geplant).</div>
@@ -142,7 +142,7 @@ export default function Track() {
       )}
 
       {showWizard ? (
-        <article className="md:col-span-2 rounded-2xl border bg-card p-6 shadow-sm">
+        <article className="md:col-span-2 rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
           <header className="mb-4">
             <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker Onboarding</h1>
           </header>
@@ -157,7 +157,7 @@ export default function Track() {
         </article>
       ) : (
         <>
-          <article className="rounded-2xl border bg-card p-6 shadow-sm">
+          <article className="rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
             <header className="mb-4 flex items-center justify-between">
               <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker</h1>
               <Badge variant={status.variant}>{status.label}</Badge>
@@ -165,7 +165,7 @@ export default function Track() {
 
             {/* Zeit – pur */}
             <div className="my-10 flex items-center justify-center">
-              <div className="text-7xl md:text-8xl font-bold font-mono tabular-nums tracking-tight">
+              <div className="font-bold font-mono tabular-nums tracking-tight text-[clamp(2.75rem,12vw,6rem)] sm:text-[clamp(3.5rem,10vw,7rem)] md:text-[clamp(4rem,8vw,8rem)]" role="status" aria-live="polite">
                 {formatTime(elapsed)}
               </div>
             </div>
@@ -173,19 +173,19 @@ export default function Track() {
             {/* Controls (ohne Hover-Animation) */}
             <div className="flex flex-wrap items-center justify-center gap-3">
               {!session && (
-                <Button size="lg" onClick={start}>
+                <Button size="lg" onClick={start} className="w-full sm:w-auto min-w-[140px]">
                   <Play className="mr-2 h-4 w-4" /> Start
                 </Button>
               )}
               {session && (
-                <Button size="lg" variant="secondary" onClick={pause}>
+                <Button size="lg" variant="secondary" onClick={pause} className="w-full sm:w-auto min-w-[140px]">
                   {session.status === 'paused' ? (<><RefreshCw className="mr-2 h-4 w-4" /> Weiter</>) : (<><Pause className="mr-2 h-4 w-4" /> Pause</>)}
                 </Button>
               )}
               {session && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button size="lg" variant="destructive">
+                    <Button size="lg" variant="destructive" className="w-full sm:w-auto min-w-[140px]">
                       <Square className="mr-2 h-4 w-4" /> Stop
                     </Button>
                   </AlertDialogTrigger>
@@ -207,7 +207,7 @@ export default function Track() {
           </article>
 
           {/* Side card for selections */}
-          <aside className="rounded-2xl border bg-card p-6 shadow-sm">
+          <aside className="rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
             <h2 className="mb-4 text-lg font-medium">Kontext</h2>
             <div className="grid gap-4">
               <div className="grid gap-2">

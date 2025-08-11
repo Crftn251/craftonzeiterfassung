@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "lucide-react";
+import OnboardingWizard from "./track/OnboardingWizard";
 
 const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
 const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
@@ -130,6 +131,8 @@ export default function Track() {
       ? { label: 'Pausiert', variant: 'secondary' }
       : { label: 'Läuft', variant: 'default' };
 
+  const showWizard = (!branch || !activity) && !session;
+
   return (
     <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-[1fr,420px]">
       {offline && (
@@ -138,83 +141,101 @@ export default function Track() {
         </div>
       )}
 
-      <article className="rounded-2xl border bg-card p-6 shadow-sm">
-        <header className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker</h1>
-          <Badge variant={status.variant}>{status.label}</Badge>
-        </header>
+      {showWizard ? (
+        <article className="md:col-span-2 rounded-2xl border bg-card p-6 shadow-sm">
+          <header className="mb-4">
+            <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker Onboarding</h1>
+          </header>
+          <OnboardingWizard
+            branches={BRANCHES as unknown as readonly string[]}
+            activities={ACTIVITIES as unknown as readonly string[]}
+            branch={branch}
+            activity={activity}
+            onChangeBranch={setBranch}
+            onChangeActivity={setActivity}
+          />
+        </article>
+      ) : (
+        <>
+          <article className="rounded-2xl border bg-card p-6 shadow-sm">
+            <header className="mb-4 flex items-center justify-between">
+              <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker</h1>
+              <Badge variant={status.variant}>{status.label}</Badge>
+            </header>
 
-        {/* Zeit – pur */}
-        <div className="my-10 flex items-center justify-center">
-          <div className="text-7xl md:text-8xl font-bold font-mono tabular-nums tracking-tight">
-            {formatTime(elapsed)}
-          </div>
-        </div>
+            {/* Zeit – pur */}
+            <div className="my-10 flex items-center justify-center">
+              <div className="text-7xl md:text-8xl font-bold font-mono tabular-nums tracking-tight">
+                {formatTime(elapsed)}
+              </div>
+            </div>
 
-        {/* Controls (ohne Hover-Animation) */}
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          {!session && (
-            <Button size="lg" onClick={start}>
-              <Play className="mr-2 h-4 w-4" /> Start
-            </Button>
-          )}
-          {session && (
-            <Button size="lg" variant="secondary" onClick={pause}>
-              {session.status === 'paused' ? (<><RefreshCw className="mr-2 h-4 w-4" /> Weiter</>) : (<><Pause className="mr-2 h-4 w-4" /> Pause</>)}
-            </Button>
-          )}
-          {session && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="lg" variant="destructive">
-                  <Square className="mr-2 h-4 w-4" /> Stop
+            {/* Controls (ohne Hover-Animation) */}
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {!session && (
+                <Button size="lg" onClick={start}>
+                  <Play className="mr-2 h-4 w-4" /> Start
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Session beenden?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Deine Netto-Arbeitszeit und Pausen werden gespeichert. Dies kann nicht rückgängig gemacht werden.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                  <AlertDialogAction onClick={stop}>Beenden</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-        </div>
-      </article>
+              )}
+              {session && (
+                <Button size="lg" variant="secondary" onClick={pause}>
+                  {session.status === 'paused' ? (<><RefreshCw className="mr-2 h-4 w-4" /> Weiter</>) : (<><Pause className="mr-2 h-4 w-4" /> Pause</>)}
+                </Button>
+              )}
+              {session && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="lg" variant="destructive">
+                      <Square className="mr-2 h-4 w-4" /> Stop
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Session beenden?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Deine Netto-Arbeitszeit und Pausen werden gespeichert. Dies kann nicht rückgängig gemacht werden.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction onClick={stop}>Beenden</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          </article>
 
-      {/* Side card for selections */}
-      <aside className="rounded-2xl border bg-card p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-medium">Kontext</h2>
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <label className="text-sm text-muted-foreground">Filiale</label>
-            <Select value={branch} onValueChange={setBranch}>
-              <SelectTrigger className=""><SelectValue placeholder="Filiale wählen" /></SelectTrigger>
-              <SelectContent>
-                {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <label className="text-sm text-muted-foreground">Tätigkeit</label>
-            <Select value={activity} onValueChange={setActivity}>
-              <SelectTrigger className=""><SelectValue placeholder="Tätigkeit wählen" /></SelectTrigger>
-              <SelectContent>
-                {ACTIVITIES.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="rounded-lg border p-3 text-sm bg-secondary/60">
-            <div className="flex items-center gap-2"><Building2 className="h-4 w-4" /> <span>{branch || 'Keine Filiale'}</span></div>
-            <div className="flex items-center gap-2 mt-1"><Briefcase className="h-4 w-4" /> <span>{activity || 'Keine Tätigkeit'}</span></div>
-          </div>
-        </div>
-      </aside>
+          {/* Side card for selections */}
+          <aside className="rounded-2xl border bg-card p-6 shadow-sm">
+            <h2 className="mb-4 text-lg font-medium">Kontext</h2>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm text-muted-foreground">Filiale</label>
+                <Select value={branch} onValueChange={setBranch}>
+                  <SelectTrigger className=""><SelectValue placeholder="Filiale wählen" /></SelectTrigger>
+                  <SelectContent>
+                    {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm text-muted-foreground">Tätigkeit</label>
+                <Select value={activity} onValueChange={setActivity}>
+                  <SelectTrigger className=""><SelectValue placeholder="Tätigkeit wählen" /></SelectTrigger>
+                  <SelectContent>
+                    {ACTIVITIES.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-lg border p-3 text-sm bg-secondary/60">
+                <div className="flex items-center gap-2"><Building2 className="h-4 w-4" /> <span>{branch || 'Keine Filiale'}</span></div>
+                <div className="flex items-center gap-2 mt-1"><Briefcase className="h-4 w-4" /> <span>{activity || 'Keine Tätigkeit'}</span></div>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
     </section>
   );
 }

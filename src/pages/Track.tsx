@@ -34,6 +34,8 @@ export default function Track() {
     return raw ? JSON.parse(raw) as SessionRecord : null;
   });
   const [offline, setOffline] = useState<boolean>(() => !navigator.onLine);
+  // optimized: lightweight tick state (no session rewrite)
+  const [tick, setTick] = useState(0);
 
   const tickRef = useRef<number | null>(null);
 
@@ -43,7 +45,7 @@ export default function Track() {
     const end = session.end ?? now;
     const total = Math.max(0, Math.floor((end - session.start) / 1000) - session.pausedSeconds);
     return total;
-  }, [session]);
+  }, [session, tick]);
 
   const goal = 8 * 3600; // 8h default
   const progress = Math.min(1, elapsed / goal);
@@ -59,8 +61,7 @@ export default function Track() {
   useEffect(() => {
     if (session && session.status === 'running') {
       tickRef.current = window.setInterval(() => {
-        // just trigger a state update by cloning session
-        setSession((s) => (s ? { ...s } : s));
+        setTick((t) => t + 1);
       }, 1000);
     }
     return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
@@ -146,7 +147,7 @@ export default function Track() {
           <Badge variant={status.variant}>{status.label}</Badge>
         </header>
 
-        {/* Progress Ring + Time */}
+        {/* Progress Ring + Time (ohne Animation) */}
         <div className="mx-auto my-8 flex flex-col items-center justify-center">
           <div className="relative h-56 w-56">
             <svg className="h-full w-full" viewBox="0 0 120 120" aria-hidden>
@@ -168,7 +169,6 @@ export default function Track() {
                 style={{
                   strokeDasharray: 2 * Math.PI * 52,
                   strokeDashoffset: (1 - progress) * 2 * Math.PI * 52,
-                  transition: 'stroke-dashoffset 0.2s ease-out',
                 }}
               />
             </svg>
@@ -179,22 +179,22 @@ export default function Track() {
           </div>
         </div>
 
-        {/* Controls */}
+        {/* Controls (ohne Hover-Animation) */}
         <div className="flex flex-wrap items-center justify-center gap-3">
           {!session && (
-            <Button size="lg" onClick={start} className="hover-scale">
+            <Button size="lg" onClick={start}>
               <Play className="mr-2 h-4 w-4" /> Start
             </Button>
           )}
           {session && (
-            <Button size="lg" variant="secondary" onClick={pause} className="hover-scale">
+            <Button size="lg" variant="secondary" onClick={pause}>
               {session.status === 'paused' ? (<><RefreshCw className="mr-2 h-4 w-4" /> Weiter</>) : (<><Pause className="mr-2 h-4 w-4" /> Pause</>)}
             </Button>
           )}
           {session && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button size="lg" variant="destructive" className="hover-scale">
+                <Button size="lg" variant="destructive">
                   <Square className="mr-2 h-4 w-4" /> Stop
                 </Button>
               </AlertDialogTrigger>

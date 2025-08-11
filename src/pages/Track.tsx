@@ -6,7 +6,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "lucide-react";
 import OnboardingWizard from "./track/OnboardingWizard";
-
+import { getSupabase } from "@/lib/supabaseClient";
 const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
 const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
 
@@ -39,6 +39,12 @@ export default function Track() {
   const [tick, setTick] = useState(0);
 
   const tickRef = useRef<number | null>(null);
+  const supabase = getSupabase();
+  const [user, setUser] = useState<any>(null);
+  const [branchOptions, setBranchOptions] = useState<string[]>([...BRANCHES] as unknown as string[]);
+  const [activityOptions, setActivityOptions] = useState<string[]>([...ACTIVITIES] as unknown as string[]);
+  const branchIdByName = useRef<Record<string, string>>({});
+  const activityIdByName = useRef<Record<string, string>>({});
 
   const elapsed = useMemo(() => {
     if (!session) return 0;
@@ -64,6 +70,33 @@ export default function Track() {
     }
     return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
   }, [session?.status]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let sub: any;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user ?? null);
+      sub = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
+    })();
+    return () => sub?.data?.subscription?.unsubscribe?.();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    (async () => {
+      const { data: b } = await supabase.from('branches').select('id,name').order('name');
+      if (b) {
+        setBranchOptions(b.map(x => x.name));
+        branchIdByName.current = Object.fromEntries(b.map(x => [x.name, x.id]));
+      }
+      const { data: a } = await supabase.from('activities').select('id,name').order('name');
+      if (a) {
+        setActivityOptions(a.map(x => x.name));
+        activityIdByName.current = Object.fromEntries(a.map(x => [x.name, x.id]));
+      }
+    })();
+  }, [supabase]);
 
   useEffect(() => {
     localStorage.setItem('ct_branch', branch);
@@ -110,13 +143,32 @@ export default function Track() {
     }
   };
 
-  const stop = () => {
+  const stop = async () => {
     if (!session) return;
     const finished: SessionRecord = { ...session, end: Date.now(), status: 'stopped' };
     const existing = JSON.parse(localStorage.getItem('ct_history') || '[]') as SessionRecord[];
     localStorage.setItem('ct_history', JSON.stringify([finished, ...existing]));
     setSession(null);
-    toast({ title: 'Session beendet', description: 'Deine Zeit wurde gespeichert. Export in Historie verfügbar.' });
+
+    if (supabase && user) {
+      const payload: any = {
+        start_time: new Date(session.start).toISOString(),
+        end_time: new Date(finished.end!).toISOString(),
+        paused_seconds: finished.pausedSeconds,
+      };
+      const bid = branchIdByName.current[branch];
+      const aid = activityIdByName.current[activity];
+      if (bid) payload.branch_id = bid;
+      if (aid) payload.activity_id = aid;
+      const { error } = await supabase.from('time_entries').insert(payload);
+      if (error) {
+        toast({ title: 'Sync fehlgeschlagen', description: error.message, variant: 'destructive' as any });
+      } else {
+        toast({ title: 'Session gespeichert', description: 'In Supabase gespeichert.' });
+      }
+    } else {
+      toast({ title: 'Session beendet', description: 'Lokal gespeichert. Login für Cloud-Sync.' });
+    }
   };
 
   useEffect(() => {
@@ -147,8 +199,8 @@ export default function Track() {
             <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker Onboarding</h1>
           </header>
           <OnboardingWizard
-            branches={BRANCHES as unknown as readonly string[]}
-            activities={ACTIVITIES as unknown as readonly string[]}
+            branches={branchOptions as unknown as readonly string[]}
+            activities={activityOptions as unknown as readonly string[]}
             branch={branch}
             activity={activity}
             onChangeBranch={setBranch}
@@ -213,7 +265,7 @@ export default function Track() {
               <div className="grid gap-2">
                 <label className="text-sm text-muted-foreground">Filiale</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {BRANCHES.map((b) => (
+                  {branchOptions.map((b) => (
                     <Button
                       key={b}
                       type="button"
@@ -230,7 +282,7 @@ export default function Track() {
               <div className="grid gap-2">
                 <label className="text-sm text-muted-foreground">Tätigkeit</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {ACTIVITIES.map((a) => (
+                  {activityOptions.map((a) => (
                     <Button
                       key={a}
                       type="button"
@@ -249,7 +301,7 @@ export default function Track() {
                 <div className="flex items-center gap-2 mt-1"><Briefcase className="h-4 w-4" /> <span>{activity || 'Keine Tätigkeit'}</span></div>
               </div>
             </div>
-          </aside>
+              </aside>
         </>
       )}
     </section>

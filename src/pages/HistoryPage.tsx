@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { getSupabase } from "@/lib/supabaseClient";
 function fmt(ts: number) {
   const d = new Date(ts);
   return d.toLocaleString();
@@ -23,6 +24,42 @@ export default function HistoryPage() {
   const history = useMemo(() => {
     return JSON.parse(localStorage.getItem('ct_history') || '[]') as any[];
   }, []);
+
+  const supabase = getSupabase();
+  const [user, setUser] = useState<any>(null);
+  const [supData, setSupData] = useState<any[]>([]);
+  const data = supData.length ? supData : history;
+  useEffect(() => {
+    if (!supabase) return;
+    let sub: any;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user ?? null);
+      sub = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
+    })();
+    return () => sub?.data?.subscription?.unsubscribe?.();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase || !user) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('id,start_time,end_time,paused_seconds, branches(name), activities(name)')
+        .order('start_time', { ascending: false });
+      if (!error && data) {
+        const mapped = data.map((r: any) => ({
+          id: r.id,
+          start: new Date(r.start_time).getTime(),
+          end: r.end_time ? new Date(r.end_time).getTime() : undefined,
+          pausedSeconds: r.paused_seconds || 0,
+          branch: r.branches?.name ?? '',
+          activity: r.activities?.name ?? '',
+        }));
+        setSupData(mapped);
+      }
+    })();
+  }, [supabase, user]);
 
   function toCsvValue(v: any) {
     const s = String(v ?? "");
@@ -74,7 +111,7 @@ export default function HistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {history.map((s: any) => (
+              {data.map((s: any) => (
                 <TableRow key={s.id}>
                   <TableCell>{new Date(s.start).toLocaleDateString()}</TableCell>
                   <TableCell>{s.branch}</TableCell>
@@ -85,7 +122,7 @@ export default function HistoryPage() {
                   <TableCell className="font-medium tabular-nums">{dur(s)}</TableCell>
                 </TableRow>
               ))}
-              {history.length === 0 && (
+              {data.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground">Noch keine Einträge</TableCell>
                 </TableRow>

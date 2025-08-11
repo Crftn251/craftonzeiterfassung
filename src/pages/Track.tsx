@@ -47,9 +47,6 @@ export default function Track() {
     return total;
   }, [session, tick]);
 
-  const goal = 8 * 3600; // 8h default
-  const progress = Math.min(1, elapsed / goal);
-
   useEffect(() => {
     const onOnline = () => setOffline(false);
     const onOffline = () => setOffline(true);
@@ -147,35 +144,10 @@ export default function Track() {
           <Badge variant={status.variant}>{status.label}</Badge>
         </header>
 
-        {/* Progress Ring + Time (ohne Animation) */}
-        <div className="mx-auto my-8 flex flex-col items-center justify-center">
-          <div className="relative h-56 w-56">
-            <svg className="h-full w-full" viewBox="0 0 120 120" aria-hidden>
-              <defs>
-                <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="hsl(195 65% 40%)" />
-                  <stop offset="100%" stopColor="hsl(12 82% 61%)" />
-                </linearGradient>
-              </defs>
-              <circle cx="60" cy="60" r="52" stroke="hsl(var(--muted))" strokeWidth="8" fill="none" />
-              <circle
-                cx="60"
-                cy="60"
-                r="52"
-                stroke="url(#ring)"
-                strokeWidth="8"
-                strokeLinecap="round"
-                fill="none"
-                style={{
-                  strokeDasharray: 2 * Math.PI * 52,
-                  strokeDashoffset: (1 - progress) * 2 * Math.PI * 52,
-                }}
-              />
-            </svg>
-            <div className="absolute inset-0 grid place-items-center">
-              <div className="text-4xl font-semibold tabular-nums">{formatTime(elapsed)}</div>
-              <div className="text-xs text-muted-foreground">Tagesziel 8h</div>
-            </div>
+        {/* Zeit – pur */}
+        <div className="my-10 flex items-center justify-center">
+          <div className="text-7xl md:text-8xl font-bold font-mono tabular-nums tracking-tight">
+            {formatTime(elapsed)}
           </div>
         </div>
 

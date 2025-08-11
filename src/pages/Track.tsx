@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "lucide-react";
@@ -212,21 +212,37 @@ export default function Track() {
             <div className="grid gap-4">
               <div className="grid gap-2">
                 <label className="text-sm text-muted-foreground">Filiale</label>
-                <Select value={branch} onValueChange={setBranch}>
-                  <SelectTrigger className=""><SelectValue placeholder="Filiale wählen" /></SelectTrigger>
-                  <SelectContent>
-                    {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {BRANCHES.map((b) => (
+                    <Button
+                      key={b}
+                      type="button"
+                      variant={branch === b ? "default" : "outline"}
+                      className="h-auto py-2 px-3 justify-center"
+                      aria-pressed={branch === b}
+                      onClick={() => setBranch(b)}
+                    >
+                      {b}
+                    </Button>
+                  ))}
+                </div>
               </div>
               <div className="grid gap-2">
                 <label className="text-sm text-muted-foreground">Tätigkeit</label>
-                <Select value={activity} onValueChange={setActivity}>
-                  <SelectTrigger className=""><SelectValue placeholder="Tätigkeit wählen" /></SelectTrigger>
-                  <SelectContent>
-                    {ACTIVITIES.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {ACTIVITIES.map((a) => (
+                    <Button
+                      key={a}
+                      type="button"
+                      variant={activity === a ? "default" : "outline"}
+                      className="h-auto py-2 px-3 justify-center"
+                      aria-pressed={activity === a}
+                      onClick={() => setActivity(a)}
+                    >
+                      {a}
+                    </Button>
+                  ))}
+                </div>
               </div>
               <div className="rounded-lg border p-3 text-sm bg-secondary/60">
                 <div className="flex items-center gap-2"><Building2 className="h-4 w-4" /> <span>{branch || 'Keine Filiale'}</span></div>

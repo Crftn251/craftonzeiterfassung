@@ -40,9 +40,8 @@ export default function AppShell() {
   }, [supabase]);
 
   useEffect(() => {
-    if (!supabase) return;
     setLoginOpen(user === null);
-  }, [supabase, user]);
+  }, [user]);
 
   const sendMagicLink = async (e: any) => {
     e.preventDefault();
@@ -93,30 +92,28 @@ export default function AppShell() {
         <Outlet />
       </main>
 
-      {supabase && (
-        <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Anmeldung</DialogTitle>
-              <DialogDescription>
-                Melde dich mit deiner E‑Mail an. Wir senden dir einen Magic Link.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={sendMagicLink} className="grid gap-4">
-              <div className="grid gap-2">
-                <label className="text-sm text-muted-foreground">E‑Mail</label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="du@example.com" />
-              </div>
-              <DialogFooter className="gap-2 sm:gap-0">
-                <DialogClose asChild>
-                  <Button type="button" variant="secondary">Später</Button>
-                </DialogClose>
-                <Button type="submit">Magic Link senden</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Anmeldung</DialogTitle>
+            <DialogDescription>
+              Melde dich mit deiner E‑Mail an. Wir senden dir einen Magic Link.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={sendMagicLink} className="grid gap-4">
+            <div className="grid gap-2">
+              <label className="text-sm text-muted-foreground">E‑Mail</label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="du@example.com" />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <DialogClose asChild>
+                <Button type="button" variant="secondary">Später</Button>
+              </DialogClose>
+              <Button type="submit">Magic Link senden</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Bottom Nav on mobile */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur md:hidden">

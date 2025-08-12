@@ -143,31 +143,105 @@ export default function Track() {
     }
   };
 
-  const stop = async () => {
-    if (!session) return;
-    const finished: SessionRecord = { ...session, end: Date.now(), status: 'stopped' };
+  // Persist a finished session locally and in Supabase (if logged in)
+  const persistFinished = async (finished: SessionRecord) => {
     const existing = JSON.parse(localStorage.getItem('ct_history') || '[]') as SessionRecord[];
     localStorage.setItem('ct_history', JSON.stringify([finished, ...existing]));
-    setSession(null);
 
     if (supabase && user) {
       const payload: any = {
-        start_time: new Date(session.start).toISOString(),
-        end_time: new Date(finished.end!).toISOString(),
+        user_id: user.id,
+        start_time: new Date(finished.start).toISOString(),
+        end_time: finished.end ? new Date(finished.end).toISOString() : null,
         paused_seconds: finished.pausedSeconds,
       };
-      const bid = branchIdByName.current[branch];
-      const aid = activityIdByName.current[activity];
+      const bid = branchIdByName.current[finished.branch];
+      const aid = activityIdByName.current[finished.activity];
       if (bid) payload.branch_id = bid;
       if (aid) payload.activity_id = aid;
       const { error } = await supabase.from('time_entries').insert(payload);
       if (error) {
         toast({ title: 'Sync fehlgeschlagen', description: error.message, variant: 'destructive' as any });
-      } else {
-        toast({ title: 'Session gespeichert', description: 'In Supabase gespeichert.' });
       }
+    }
+  };
+
+  const stop = async () => {
+    if (!session) return;
+    const now = Date.now();
+    let pausedExtra = 0;
+    if (session.status === 'paused') {
+      const pausedMarker = Number(localStorage.getItem('ct_paused_since')) || now;
+      pausedExtra = Math.max(0, Math.floor((now - pausedMarker) / 1000));
+      localStorage.removeItem('ct_paused_since');
+    }
+    const finished: SessionRecord = { ...session, end: now, status: 'stopped', pausedSeconds: session.pausedSeconds + pausedExtra };
+    await persistFinished(finished);
+    setSession(null);
+    toast({ title: 'Session beendet', description: 'Abschnitt gespeichert.' });
+  };
+
+  const handleChangeBranch = async (nextBranch: string) => {
+    if (session && (session.status === 'running' || session.status === 'paused')) {
+      const now = Date.now();
+      let pausedExtra = 0;
+      if (session.status === 'paused') {
+        const pausedMarker = Number(localStorage.getItem('ct_paused_since')) || now;
+        pausedExtra = Math.max(0, Math.floor((now - pausedMarker) / 1000));
+      }
+      const finished: SessionRecord = { ...session, end: now, status: 'stopped', pausedSeconds: session.pausedSeconds + pausedExtra };
+      // Clear any previous pause marker since we finalize this segment now
+      localStorage.removeItem('ct_paused_since');
+      await persistFinished(finished);
+
+      setBranch(nextBranch);
+      const newSession: SessionRecord = {
+        id: crypto.randomUUID(),
+        start: now,
+        pausedSeconds: 0,
+        branch: nextBranch,
+        activity: activity,
+        status: session.status,
+      };
+      setSession(newSession);
+      if (session.status === 'paused') {
+        localStorage.setItem('ct_paused_since', String(now));
+      }
+      toast({ title: 'Filiale gewechselt', description: 'Abschnitt gespeichert, neuer gestartet.' });
     } else {
-      toast({ title: 'Session beendet', description: 'Lokal gespeichert. Login für Cloud-Sync.' });
+      setBranch(nextBranch);
+    }
+  };
+
+  const handleChangeActivity = async (nextActivity: string) => {
+    if (session && (session.status === 'running' || session.status === 'paused')) {
+      const now = Date.now();
+      let pausedExtra = 0;
+      if (session.status === 'paused') {
+        const pausedMarker = Number(localStorage.getItem('ct_paused_since')) || now;
+        pausedExtra = Math.max(0, Math.floor((now - pausedMarker) / 1000));
+      }
+      const finished: SessionRecord = { ...session, end: now, status: 'stopped', pausedSeconds: session.pausedSeconds + pausedExtra };
+      // Clear any previous pause marker since we finalize this segment now
+      localStorage.removeItem('ct_paused_since');
+      await persistFinished(finished);
+
+      setActivity(nextActivity);
+      const newSession: SessionRecord = {
+        id: crypto.randomUUID(),
+        start: now,
+        pausedSeconds: 0,
+        branch: branch,
+        activity: nextActivity,
+        status: session.status,
+      };
+      setSession(newSession);
+      if (session.status === 'paused') {
+        localStorage.setItem('ct_paused_since', String(now));
+      }
+      toast({ title: 'Tätigkeit gewechselt', description: 'Abschnitt gespeichert, neuer gestartet.' });
+    } else {
+      setActivity(nextActivity);
     }
   };
 
@@ -272,7 +346,7 @@ export default function Track() {
                       variant={branch === b ? "default" : "outline"}
                       className="h-auto py-2 px-3 justify-center"
                       aria-pressed={branch === b}
-                      onClick={() => setBranch(b)}
+                      onClick={() => handleChangeBranch(b)}
                     >
                       {b}
                     </Button>
@@ -289,7 +363,7 @@ export default function Track() {
                       variant={activity === a ? "default" : "outline"}
                       className="h-auto py-2 px-3 justify-center"
                       aria-pressed={activity === a}
-                      onClick={() => setActivity(a)}
+                      onClick={() => handleChangeActivity(a)}
                     >
                       {a}
                     </Button>

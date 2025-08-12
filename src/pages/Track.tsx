@@ -151,8 +151,8 @@ export default function Track() {
     if (supabase && user) {
       const payload: any = {
         user_id: user.id,
-        start_time: new Date(finished.start).toISOString(),
-        end_time: finished.end ? new Date(finished.end).toISOString() : null,
+        started_at: new Date(finished.start).toISOString(),
+        ended_at: finished.end ? new Date(finished.end).toISOString() : null,
         paused_seconds: finished.pausedSeconds,
       };
       const bid = branchIdByName.current[finished.branch];

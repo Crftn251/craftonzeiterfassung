@@ -45,13 +45,13 @@ export default function HistoryPage() {
     (async () => {
       const { data, error } = await supabase
         .from('time_entries')
-        .select('id,start_time,end_time,paused_seconds, branches(name), activities(name)')
-        .order('start_time', { ascending: false });
+        .select('id,started_at,ended_at,paused_seconds, branches(name), activities(name)')
+        .order('started_at', { ascending: false });
       if (!error && data) {
         const mapped = data.map((r: any) => ({
           id: r.id,
-          start: new Date(r.start_time).getTime(),
-          end: r.end_time ? new Date(r.end_time).getTime() : undefined,
+          start: new Date(r.started_at).getTime(),
+          end: r.ended_at ? new Date(r.ended_at).getTime() : undefined,
           pausedSeconds: r.paused_seconds || 0,
           branch: r.branches?.name ?? '',
           activity: r.activities?.name ?? '',

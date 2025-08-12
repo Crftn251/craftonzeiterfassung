@@ -37,15 +37,26 @@ export default function ProfileAnalytics() {
   const [activities, setActivities] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-    (async () => {
-      const [{ data: b }, { data: a }] = await Promise.all([
-        supabase.from('branches').select('id,name').order('name'),
-        supabase.from('activities').select('id,name').order('name'),
-      ]);
-      setBranches(b || []);
-      setActivities(a || []);
-    })();
+    let mounted = true;
+    supabase.auth.getUser().then(async ({ data }) => {
+      const uid = data.user?.id ?? null;
+      if (!mounted) return;
+      setUserId(uid);
+      if (uid) {
+        const [{ data: b }, { data: a }] = await Promise.all([
+          supabase.from('branches').select('id,name').order('name'),
+          supabase.from('activities').select('id,name').order('name'),
+        ]);
+        if (!mounted) return;
+        setBranches(b || []);
+        setActivities(a || []);
+      } else {
+        // Offline/unauthenticated: provide static activities so user can backfill locally
+        setBranches([]);
+        setActivities(BACKFILL_ACTIVITY_NAMES.map((n) => ({ id: n, name: n })));
+      }
+    });
+    return () => { mounted = false; };
   }, []);
 
   const totalSeconds = history.reduce((acc, s) => acc + Math.max(0, Math.floor(((s.end ?? Date.now()) - s.start) / 1000) - (s.pausedSeconds || 0)), 0);

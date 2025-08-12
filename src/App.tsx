@@ -12,6 +12,7 @@ import SettingsPage from "./pages/SettingsPage";
 import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
+import RequireAuth from "@/components/auth/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -23,7 +24,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<AppShell />}>
-            <Route index element={<Track />} />
+            <Route index element={<RequireAuth><Track /></RequireAuth>} />
             <Route path="profil" element={<ProfileAnalytics />} />
             <Route path="historie" element={<HistoryPage />} />
             <Route path="einstellungen" element={<SettingsPage />} />

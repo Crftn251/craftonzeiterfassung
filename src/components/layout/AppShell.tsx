@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, History, Settings, ShieldCheck, LogOut, Timer, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,8 @@ export default function AppShell() {
   const [user, setUser] = useState<any>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [email, setEmail] = useState("");
-
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
     const meta = document.querySelector('meta[name="description"]');
@@ -40,8 +41,10 @@ export default function AppShell() {
   }, [supabase]);
 
   useEffect(() => {
-    setLoginOpen(user === null);
-  }, [user]);
+    if (user === null && location.pathname !== "/login") {
+      navigate("/login", { replace: true });
+    }
+  }, [user, location.pathname, navigate]);
 
   const sendMagicLink = async (e: any) => {
     e.preventDefault();
@@ -92,28 +95,7 @@ export default function AppShell() {
         <Outlet />
       </main>
 
-      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Anmeldung</DialogTitle>
-            <DialogDescription>
-              Melde dich mit deiner E‑Mail an. Wir senden dir einen Magic Link.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={sendMagicLink} className="grid gap-4">
-            <div className="grid gap-2">
-              <label className="text-sm text-muted-foreground">E‑Mail</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="du@example.com" />
-            </div>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <DialogClose asChild>
-                <Button type="button" variant="secondary">Später</Button>
-              </DialogClose>
-              <Button type="submit">Magic Link senden</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Login-Dialog entfernt – bitte /login zum Anmelden verwenden */}
 
       {/* Bottom Nav on mobile */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur md:hidden">

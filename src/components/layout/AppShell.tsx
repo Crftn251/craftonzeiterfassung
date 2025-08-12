@@ -1,11 +1,8 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { BarChart3, History, Settings, ShieldCheck, LogOut, Timer, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabaseClient";
-import { toast } from "@/components/ui/use-toast";
 const navItems = [
   { to: "/", label: "Tracken", icon: Timer },
   { to: "/profil", label: "Profil", icon: BarChart3 },
@@ -17,10 +14,6 @@ const navItems = [
 export default function AppShell() {
   const supabase = getSupabase();
   const [user, setUser] = useState<any>(null);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const location = useLocation();
-  const navigate = useNavigate();
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
     const meta = document.querySelector('meta[name="description"]');
@@ -40,27 +33,8 @@ export default function AppShell() {
     return () => sub?.data?.subscription?.unsubscribe?.();
   }, [supabase]);
 
-  useEffect(() => {
-    if (user === null && location.pathname !== "/login") {
-      navigate("/login", { replace: true });
-    }
-  }, [user, location.pathname, navigate]);
+  // No automatic redirects; use explicit /login route
 
-  const sendMagicLink = async (e: any) => {
-    e.preventDefault();
-    if (!supabase) {
-      toast({ title: "Konfiguration erforderlich", description: "Bitte Supabase URL & Anon Key unter Einstellungen speichern.", variant: "destructive" as any });
-      return;
-    }
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-    if (error) {
-      toast({ title: "Login fehlgeschlagen", description: error.message, variant: "destructive" as any });
-    } else {
-      toast({ title: "E-Mail gesendet", description: "Prüfe dein Postfach für den Magic Link." });
-      setEmail("");
-      setLoginOpen(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -42,16 +42,21 @@ export default function Auth() {
     canonical.setAttribute("href", window.location.href);
   }, [pageTitle, mode]);
 
+  const redirectedRef = useRef(false);
   useEffect(() => {
-    // Redirect authenticated users away from auth page
+    // Redirect authenticated users away from auth page only once
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
+      if (session?.user && !redirectedRef.current) {
+        redirectedRef.current = true;
         navigate("/", { replace: true });
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) navigate("/", { replace: true });
+      if (session?.user && !redirectedRef.current) {
+        redirectedRef.current = true;
+        navigate("/", { replace: true });
+      }
     });
 
     return () => {

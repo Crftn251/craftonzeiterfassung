@@ -12,6 +12,15 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+const BACKFILL_ACTIVITY_NAMES = [
+  "Ordnung",
+  "Verkauf",
+  "Social Media",
+  "OLS",
+  "Ordern",
+  "Meeting",
+] as const;
+
 export default function ProfileAnalytics() {
   useEffect(() => {
     document.title = 'Profil & Auswertungen – Crafton Time';
@@ -198,9 +207,11 @@ export default function ProfileAnalytics() {
                     <SelectValue placeholder="Tätigkeit wählen" />
                   </SelectTrigger>
                   <SelectContent>
-                    {activities.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                    ))}
+                    {activities
+                      .filter((a) => BACKFILL_ACTIVITY_NAMES.includes(a.name as any))
+                      .map((a) => (
+                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

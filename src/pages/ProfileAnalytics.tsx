@@ -176,7 +176,7 @@ export default function ProfileAnalytics() {
                       {date ? date.toLocaleDateString() : <span>Datum wählen</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="z-50 w-auto p-0" align="start">
                     <Calendar 
                       mode="single" 
                       selected={date}
@@ -204,7 +204,7 @@ export default function ProfileAnalytics() {
                   <SelectTrigger>
                     <SelectValue placeholder="Filiale wählen" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
                     {branches.map((b) => (
                       <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                     ))}
@@ -217,7 +217,7 @@ export default function ProfileAnalytics() {
                   <SelectTrigger>
                     <SelectValue placeholder="Tätigkeit wählen" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
                     {activities
                       .filter((a) => BACKFILL_ACTIVITY_NAMES.includes(a.name as any))
                       .map((a) => (

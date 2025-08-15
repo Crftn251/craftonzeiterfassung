@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { BarChart3, History, Settings, ShieldCheck, LogOut, Timer, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { getSupabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 const navItems = [
   { to: "/", label: "Tracken", icon: Timer },
   { to: "/profil", label: "Profil", icon: BarChart3 },
@@ -12,7 +12,6 @@ const navItems = [
 ];
 
 export default function AppShell() {
-  const supabase = getSupabase();
   const [user, setUser] = useState<any>(null);
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
@@ -21,17 +20,18 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (!supabase) return;
-    let sub: any;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user ?? null);
-      sub = supabase.auth.onAuthStateChange((_e, session) => {
-        setUser(session?.user ?? null);
-      });
-    })();
-    return () => sub?.data?.subscription?.unsubscribe?.();
-  }, [supabase]);
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   // No automatic redirects; use explicit /login route
 

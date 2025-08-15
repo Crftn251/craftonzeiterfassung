@@ -73,7 +73,7 @@ export default function AppShell() {
 
       {/* Bottom Nav on mobile */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur md:hidden">
-        <ul className="grid grid-cols-5">
+        <ul className={`grid ${user ? 'grid-cols-6' : 'grid-cols-5'}`}>
           {navItems.map(({ to, label, icon: Icon }) => (
             <li key={to}>
               <NavLink to={to} end className={({ isActive }) => `flex flex-col items-center gap-1 py-2 text-xs ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
@@ -82,6 +82,24 @@ export default function AppShell() {
               </NavLink>
             </li>
           ))}
+          {user ? (
+            <li>
+              <button 
+                onClick={() => supabase?.auth.signOut()}
+                className="flex flex-col items-center gap-1 py-2 text-xs text-muted-foreground w-full"
+              >
+                <LogOut className="h-5 w-5" />
+                Logout
+              </button>
+            </li>
+          ) : (
+            <li>
+              <NavLink to="/login" className="flex flex-col items-center gap-1 py-2 text-xs text-muted-foreground">
+                <LogIn className="h-5 w-5" />
+                Login
+              </NavLink>
+            </li>
+          )}
         </ul>
       </nav>
     </div>

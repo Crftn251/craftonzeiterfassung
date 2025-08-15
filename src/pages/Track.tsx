@@ -339,7 +339,7 @@ export default function Track() {
               <div className="grid gap-4">
                 <h3 className="text-xl font-medium">Wo arbeitest du?</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {branchOptions.map((b) => (
+                  {(branchOptions.length > 0 ? branchOptions : BRANCHES).map((b) => (
                     <Button
                       key={b}
                       type="button"

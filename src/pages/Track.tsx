@@ -336,15 +336,15 @@ export default function Track() {
           <aside className="rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
             <h2 className="mb-4 text-lg font-medium">Kontext</h2>
             <div className="grid gap-4">
-              <div className="grid gap-2">
-                <label className="text-sm text-muted-foreground">Filiale</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid gap-4">
+                <h3 className="text-xl font-medium">Wo arbeitest du?</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {branchOptions.map((b) => (
                     <Button
                       key={b}
                       type="button"
                       variant={branch === b ? "default" : "outline"}
-                      className="h-auto py-2 px-3 justify-center"
+                      className="h-auto py-4 px-4 justify-center"
                       aria-pressed={branch === b}
                       onClick={() => handleChangeBranch(b)}
                     >
@@ -353,15 +353,15 @@ export default function Track() {
                   ))}
                 </div>
               </div>
-              <div className="grid gap-2">
-                <label className="text-sm text-muted-foreground">Tätigkeit</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid gap-4">
+                <h3 className="text-xl font-medium">Was machst du?</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {activityOptions.map((a) => (
                     <Button
                       key={a}
                       type="button"
                       variant={activity === a ? "default" : "outline"}
-                      className="h-auto py-2 px-3 justify-center"
+                      className="h-auto py-4 px-4 justify-center"
                       aria-pressed={activity === a}
                       onClick={() => handleChangeActivity(a)}
                     >
@@ -371,11 +371,15 @@ export default function Track() {
                 </div>
               </div>
               <div className="rounded-lg border p-3 text-sm bg-secondary/60">
-                <div className="flex items-center gap-2"><Building2 className="h-4 w-4" /> <span>{branch || 'Keine Filiale'}</span></div>
-                <div className="flex items-center gap-2 mt-1"><Briefcase className="h-4 w-4" /> <span>{activity || 'Keine Tätigkeit'}</span></div>
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" /> <span>{branch || "Keine Filiale"}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <Briefcase className="h-4 w-4" /> <span>{activity || "Keine Tätigkeit"}</span>
+                </div>
               </div>
             </div>
-              </aside>
+          </aside>
         </>
       )}
     </section>

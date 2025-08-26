@@ -12,9 +12,9 @@ on conflict (name) do nothing;
 
 insert into public.activities (name)
 values
-  ('Planung'),
+  ('Dokumentation'),
   ('Montage'),
-  ('Wartung'),
+  ('Planung'),
   ('Support'),
-  ('Dokumentation')
+  ('Wartung')
 on conflict (name) do nothing;

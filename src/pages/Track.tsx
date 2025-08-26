@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "lucide-react";
 import OnboardingWizard from "./track/OnboardingWizard";
 import { getSupabase } from "@/lib/supabaseClient";
+import { format } from "date-fns";
 const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
 const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
 
@@ -45,6 +46,7 @@ export default function Track() {
   const [activityOptions, setActivityOptions] = useState<string[]>([...ACTIVITIES] as unknown as string[]);
   const branchIdByName = useRef<Record<string, string>>({});
   const activityIdByName = useRef<Record<string, string>>({});
+  const [todayAbsence, setTodayAbsence] = useState<string | null>(null);
 
   const elapsed = useMemo(() => {
     if (!session) return 0;
@@ -95,8 +97,21 @@ export default function Track() {
         setActivityOptions(a.map(x => x.name));
         activityIdByName.current = Object.fromEntries(a.map(x => [x.name, x.id]));
       }
+      
+      // Check if today is marked as absence day
+      if (user) {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const { data: absence } = await supabase
+          .from('absence_days')
+          .select('type')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle();
+        
+        setTodayAbsence(absence?.type || null);
+      }
     })();
-  }, [supabase]);
+  }, [supabase, user]);
 
   useEffect(() => {
     localStorage.setItem('ct_branch', branch);
@@ -116,6 +131,17 @@ export default function Track() {
       toast({ title: 'Auswahl erforderlich', description: 'Bitte Filiale und Tätigkeit wählen.' });
       return;
     }
+    
+    if (todayAbsence) {
+      const absenceText = todayAbsence === 'sickness' ? 'Krankheit (K)' : 'Urlaub (U)';
+      toast({ 
+        title: 'Zeiterfassung blockiert', 
+        description: `Heute ist als ${absenceText} markiert. Zeiterfassung nicht möglich.`,
+        variant: 'destructive'
+      });
+      return;
+    }
+    
     const s: SessionRecord = {
       id: crypto.randomUUID(),
       start: Date.now(),
@@ -266,6 +292,17 @@ export default function Track() {
           <div className="flex items-center gap-2"><WifiOff className="h-4 w-4" /> Offline – Timer läuft serverseitig weiter (geplant).</div>
         </div>
       )}
+      
+      {todayAbsence && (
+        <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-red-50 border-red-200">
+          <div className="flex items-center gap-2 text-red-700">
+            <span className="font-semibold">
+              {todayAbsence === 'sickness' ? 'K' : 'U'}
+            </span>
+            Heute ist als {todayAbsence === 'sickness' ? 'Krankheitstag' : 'Urlaubstag'} markiert. Zeiterfassung blockiert.
+          </div>
+        </div>
+      )}
 
       {showWizard ? (
         <article className="md:col-span-2 rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
@@ -299,7 +336,12 @@ export default function Track() {
             {/* Controls (ohne Hover-Animation) */}
             <div className="flex flex-wrap items-center justify-center gap-3">
               {!session && (
-                <Button size="lg" onClick={start} className="w-full sm:w-auto min-w-[140px]">
+                <Button 
+                  size="lg" 
+                  onClick={start} 
+                  className="w-full sm:w-auto min-w-[140px]"
+                  disabled={!!todayAbsence}
+                >
                   <Play className="mr-2 h-4 w-4" /> Start
                 </Button>
               )}

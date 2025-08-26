@@ -28,7 +28,14 @@ export default function HistoryPage() {
   const supabase = getSupabase();
   const [user, setUser] = useState<any>(null);
   const [supData, setSupData] = useState<any[]>([]);
-  const data = supData.length ? supData : history;
+  const [absenceData, setAbsenceData] = useState<any[]>([]);
+  
+  // Combine time entries and absence days, sort by date
+  const data = useMemo(() => {
+    const timeEntries = supData.length ? supData : history;
+    const allEntries = [...timeEntries, ...absenceData];
+    return allEntries.sort((a, b) => (b.start || b.date) - (a.start || a.date));
+  }, [supData, history, absenceData]);
   useEffect(() => {
     if (!supabase) return;
     let sub: any;
@@ -43,20 +50,41 @@ export default function HistoryPage() {
   useEffect(() => {
     if (!supabase || !user) return;
     (async () => {
-      const { data, error } = await supabase
+      // Fetch time entries
+      const { data: timeData, error: timeError } = await supabase
         .from('time_entries')
         .select('id,started_at,ended_at,paused_seconds, branches(name), activities(name)')
         .order('started_at', { ascending: false });
-      if (!error && data) {
-        const mapped = data.map((r: any) => ({
+      
+      if (!timeError && timeData) {
+        const mapped = timeData.map((r: any) => ({
           id: r.id,
           start: new Date(r.started_at).getTime(),
           end: r.ended_at ? new Date(r.ended_at).getTime() : undefined,
           pausedSeconds: r.paused_seconds || 0,
           branch: r.branches?.name ?? '',
           activity: r.activities?.name ?? '',
+          type: 'time_entry'
         }));
         setSupData(mapped);
+      }
+
+      // Fetch absence days
+      const { data: absenceDataResult, error: absenceError } = await supabase
+        .from('absence_days')
+        .select('id,date,type')
+        .order('date', { ascending: false });
+      
+      if (!absenceError && absenceDataResult) {
+        const mappedAbsence = absenceDataResult.map((r: any) => ({
+          id: r.id,
+          date: new Date(r.date).getTime(),
+          start: new Date(r.date).getTime(), // For sorting
+          branch: r.type === 'sick' ? 'Krankheit' : 'Urlaub',
+          activity: r.type === 'sick' ? 'K' : 'U',
+          type: 'absence'
+        }));
+        setAbsenceData(mappedAbsence);
       }
     })();
   }, [supabase, user]);
@@ -113,13 +141,21 @@ export default function HistoryPage() {
             <TableBody>
               {data.map((s: any) => (
                 <TableRow key={s.id}>
-                  <TableCell>{new Date(s.start).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(s.start || s.date).toLocaleDateString()}</TableCell>
                   <TableCell>{s.branch}</TableCell>
                   <TableCell>{s.activity}</TableCell>
-                  <TableCell>{fmt(s.start)}</TableCell>
-                  <TableCell>{s.end ? fmt(s.end) : '—'}</TableCell>
-                  <TableCell>{Math.floor((s.pausedSeconds || 0) / 60)} min</TableCell>
-                  <TableCell className="font-medium tabular-nums">{dur(s)}</TableCell>
+                  <TableCell>
+                    {s.type === 'absence' ? '—' : fmt(s.start)}
+                  </TableCell>
+                  <TableCell>
+                    {s.type === 'absence' ? '—' : (s.end ? fmt(s.end) : '—')}
+                  </TableCell>
+                  <TableCell>
+                    {s.type === 'absence' ? '—' : `${Math.floor((s.pausedSeconds || 0) / 60)} min`}
+                  </TableCell>
+                  <TableCell className="font-medium tabular-nums">
+                    {s.type === 'absence' ? '—' : dur(s)}
+                  </TableCell>
                 </TableRow>
               ))}
               {data.length === 0 && (

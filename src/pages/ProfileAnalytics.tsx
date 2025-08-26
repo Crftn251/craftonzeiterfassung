@@ -275,7 +275,7 @@ export default function ProfileAnalytics() {
                   mode="multiple"
                   selected={selectedAbsenceDates}
                   onSelect={(dates) => setSelectedAbsenceDates(dates || [])}
-                  className={cn("p-3 pointer-events-auto")}
+                  className={cn("p-3 pointer-events-auto w-full flex justify-center")}
                   modifiers={{
                     sickness: (date) => absenceDates[format(date, 'yyyy-MM-dd')] === 'sickness',
                     vacation: (date) => absenceDates[format(date, 'yyyy-MM-dd')] === 'vacation',

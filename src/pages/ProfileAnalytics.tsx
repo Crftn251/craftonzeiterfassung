@@ -276,14 +276,6 @@ export default function ProfileAnalytics() {
                   selected={selectedAbsenceDates}
                   onSelect={(dates) => setSelectedAbsenceDates(dates || [])}
                   className={cn("p-3 pointer-events-auto w-full flex justify-center")}
-                  modifiers={{
-                    sickness: (date) => absenceDates[format(date, 'yyyy-MM-dd')] === 'sickness',
-                    vacation: (date) => absenceDates[format(date, 'yyyy-MM-dd')] === 'vacation',
-                  }}
-                  modifiersStyles={{
-                    sickness: { backgroundColor: '#fef2f2', color: '#dc2626' },
-                    vacation: { backgroundColor: '#eff6ff', color: '#2563eb' },
-                  }}
                 />
                 
                 {selectedAbsenceDates.length > 0 && (

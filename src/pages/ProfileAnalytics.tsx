@@ -61,6 +61,7 @@ export default function ProfileAnalytics() {
         absences?.forEach(absence => {
           absenceMap[absence.date] = absence.type as 'sickness' | 'vacation';
         });
+        setAbsenceDates(absenceMap);
         
         // Load time entries for analytics
         if (uid) {

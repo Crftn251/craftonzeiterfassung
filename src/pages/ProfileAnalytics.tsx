@@ -196,6 +196,12 @@ export default function ProfileAnalytics() {
         description: `${selectedAbsenceDates.length} Tage als ${absenceType === 'sickness' ? 'Krankheit' : 'Urlaub'} markiert.` 
       });
       
+      // Trigger a storage event to notify other components (like HistoryPage)
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'absence_days_updated',
+        newValue: Date.now().toString()
+      }));
+      
       setShowAbsenceCalendar(false);
       setSelectedAbsenceDates([]);
     } catch (error: any) {

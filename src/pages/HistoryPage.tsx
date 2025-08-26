@@ -44,8 +44,43 @@ export default function HistoryPage() {
       setUser(data.user ?? null);
       sub = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
     })();
-    return () => sub?.data?.subscription?.unsubscribe?.();
-  }, [supabase]);
+    
+    // Listen for absence days updates
+    const handleStorageUpdate = () => {
+      // Force refresh of absence data when absence days are updated
+      if (user) {
+        fetchAbsenceData();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageUpdate);
+    
+    return () => {
+      sub?.data?.subscription?.unsubscribe?.();
+      window.removeEventListener('storage', handleStorageUpdate);
+    };
+  }, [supabase, user]);
+
+  const fetchAbsenceData = async () => {
+    if (!supabase || !user) return;
+    
+    const { data: absenceDataResult, error: absenceError } = await supabase
+      .from('absence_days')
+      .select('id,date,type')
+      .order('date', { ascending: false });
+    
+    if (!absenceError && absenceDataResult) {
+      const mappedAbsence = absenceDataResult.map((r: any) => ({
+        id: r.id,
+        date: new Date(r.date).getTime(),
+        start: new Date(r.date).getTime(), // For sorting
+        branch: r.type === 'sick' ? 'Krankheit' : 'Urlaub',
+        activity: r.type === 'sick' ? 'K' : 'U',
+        type: 'absence'
+      }));
+      setAbsenceData(mappedAbsence);
+    }
+  };
 
   useEffect(() => {
     if (!supabase || !user) return;
@@ -70,22 +105,7 @@ export default function HistoryPage() {
       }
 
       // Fetch absence days
-      const { data: absenceDataResult, error: absenceError } = await supabase
-        .from('absence_days')
-        .select('id,date,type')
-        .order('date', { ascending: false });
-      
-      if (!absenceError && absenceDataResult) {
-        const mappedAbsence = absenceDataResult.map((r: any) => ({
-          id: r.id,
-          date: new Date(r.date).getTime(),
-          start: new Date(r.date).getTime(), // For sorting
-          branch: r.type === 'sick' ? 'Krankheit' : 'Urlaub',
-          activity: r.type === 'sick' ? 'K' : 'U',
-          type: 'absence'
-        }));
-        setAbsenceData(mappedAbsence);
-      }
+      await fetchAbsenceData();
     })();
   }, [supabase, user]);
 

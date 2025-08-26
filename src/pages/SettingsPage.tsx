@@ -22,26 +22,6 @@ const save = () => {
   return (
     <>
       <h1 className="sr-only">Einstellungen – Crafton Time</h1>
-      <section className="max-w-xl rounded-2xl border bg-card p-6">
-        <h2 className="mb-4 text-xl font-semibold">Einstellungen</h2>
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <label className="text-sm text-muted-foreground">Wochenziel (Stunden)</label>
-            <Input value={weekGoal} onChange={(e) => setWeekGoal(e.target.value)} />
-          </div>
-          <div className="grid gap-2">
-            <label className="text-sm text-muted-foreground">Supabase URL</label>
-            <Input placeholder="https://xxx.supabase.co" value={supabaseUrl} onChange={(e) => setSupabaseUrl(e.target.value)} />
-          </div>
-          <div className="grid gap-2">
-            <label className="text-sm text-muted-foreground">Supabase Anon Key</label>
-            <Input placeholder="eyJhbGciOiJI..." value={supabaseAnon} onChange={(e) => setSupabaseAnon(e.target.value)} />
-          </div>
-          <div>
-            <Button onClick={save}>Speichern</Button>
-          </div>
-        </div>
-      </section>
     </>
   );
 }

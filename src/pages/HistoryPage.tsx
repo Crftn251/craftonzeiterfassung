@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 import { getSupabase } from "@/lib/supabaseClient";
 function fmt(ts: number) {
   const d = new Date(ts);
@@ -21,21 +22,16 @@ export default function HistoryPage() {
     if (meta) meta.setAttribute('content', 'Alle Sessions als Tabelle – filter- und exportierbar (bald).');
   }, []);
 
-  const history = useMemo(() => {
-    return JSON.parse(localStorage.getItem('ct_history') || '[]') as any[];
-  }, []);
-
   const supabase = getSupabase();
   const [user, setUser] = useState<any>(null);
   const [supData, setSupData] = useState<any[]>([]);
   const [absenceData, setAbsenceData] = useState<any[]>([]);
   
-  // Combine time entries and absence days, sort by date
+  // Only use Supabase data, no localStorage fallback
   const data = useMemo(() => {
-    const timeEntries = supData.length ? supData : history;
-    const allEntries = [...timeEntries, ...absenceData];
+    const allEntries = [...supData, ...absenceData];
     return allEntries.sort((a, b) => (b.start || b.date) - (a.start || a.date));
-  }, [supData, history, absenceData]);
+  }, [supData, absenceData]);
   useEffect(() => {
     if (!supabase) return;
     let sub: any;
@@ -141,15 +137,20 @@ export default function HistoryPage() {
   }
 
   const exportCsv = () => {
+    if (data.length === 0) {
+      toast({ title: 'Keine Daten', description: 'Es gibt keine Daten zum Exportieren.', variant: 'destructive' });
+      return;
+    }
+    
     const header = ["Datum","Filiale","Tätigkeit","Start","Ende","Pause(min)","Netto(HH:MM)"];
-    const rows = history.map((s: any) => [
-      new Date(s.start).toLocaleDateString(),
+    const rows = data.map((s: any) => [
+      new Date(s.start || s.date).toLocaleDateString(),
       s.branch ?? "",
       s.activity ?? "",
-      fmt(s.start),
-      s.end ? fmt(s.end) : "—",
-      Math.floor((s.pausedSeconds || 0) / 60),
-      dur(s)
+      s.type === 'absence' ? '—' : fmt(s.start),
+      s.type === 'absence' ? '—' : (s.end ? fmt(s.end) : '—'),
+      s.type === 'absence' ? '—' : Math.floor((s.pausedSeconds || 0) / 60),
+      s.type === 'absence' ? '—' : dur(s)
     ]);
     const csv = [header, ...rows].map(r => r.map(toCsvValue).join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });

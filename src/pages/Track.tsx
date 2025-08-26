@@ -127,6 +127,11 @@ export default function Track() {
   }, [session]);
 
   const start = () => {
+    if (!supabase || !user) {
+      toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um die Zeiterfassung zu nutzen.', variant: 'destructive' });
+      return;
+    }
+    
     if (!branch || !activity) {
       toast({ title: 'Auswahl erforderlich', description: 'Bitte Filiale und Tätigkeit wählen.' });
       return;
@@ -169,33 +174,35 @@ export default function Track() {
     }
   };
 
-  // Persist a finished session locally and in Supabase (if logged in)
+  // Persist a finished session only in Supabase
   const persistFinished = async (finished: SessionRecord) => {
-    const existing = JSON.parse(localStorage.getItem('ct_history') || '[]') as SessionRecord[];
-    localStorage.setItem('ct_history', JSON.stringify([finished, ...existing]));
-
-    if (supabase && user) {
-      const payload: any = {
-        user_id: user.id,
-        started_at: new Date(finished.start).toISOString(),
-        ended_at: finished.end ? new Date(finished.end).toISOString() : null,
-        paused_seconds: finished.pausedSeconds,
-      };
-      const bid = branchIdByName.current[finished.branch];
-      const aid = activityIdByName.current[finished.activity];
-      if (bid) payload.branch_id = bid;
-      if (aid) payload.activity_id = aid;
-      const { error } = await supabase.from('time_entries').insert(payload);
-      if (error) {
-        toast({ title: 'Sync fehlgeschlagen', description: error.message, variant: 'destructive' as any });
-      } else {
-        // Trigger storage event to refresh other components
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'time_entries_updated',
-          newValue: Date.now().toString()
-        }));
-      }
+    if (!supabase || !user) {
+      toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um Zeiten zu speichern.', variant: 'destructive' });
+      return;
     }
+
+    const payload: any = {
+      user_id: user.id,
+      started_at: new Date(finished.start).toISOString(),
+      ended_at: finished.end ? new Date(finished.end).toISOString() : null,
+      paused_seconds: finished.pausedSeconds,
+    };
+    const bid = branchIdByName.current[finished.branch];
+    const aid = activityIdByName.current[finished.activity];
+    if (bid) payload.branch_id = bid;
+    if (aid) payload.activity_id = aid;
+    
+    const { error } = await supabase.from('time_entries').insert(payload);
+    if (error) {
+      toast({ title: 'Speichern fehlgeschlagen', description: error.message, variant: 'destructive' });
+      return;
+    }
+    
+    // Trigger storage event to refresh other components
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'time_entries_updated',
+      newValue: Date.now().toString()
+    }));
   };
 
   const stop = async () => {

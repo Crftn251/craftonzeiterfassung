@@ -29,13 +29,10 @@ export default function ProfileAnalytics() {
     if (meta) meta.setAttribute('content', 'Heute, Woche, Monat – Summen, Ziele und Fortschritt.');
   }, []);
 
-  const history = useMemo(() => {
-    return JSON.parse(localStorage.getItem('ct_history') || '[]') as any[];
-  }, []);
-
   const [userId, setUserId] = useState<string | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [activities, setActivities] = useState<{ id: string; name: string }[]>([]);
+  const [timeEntries, setTimeEntries] = useState<any[]>([]);
   
   // Absence tracking state
   const [absenceDates, setAbsenceDates] = useState<{ [key: string]: 'sickness' | 'vacation' }>({});
@@ -64,7 +61,25 @@ export default function ProfileAnalytics() {
         absences?.forEach(absence => {
           absenceMap[absence.date] = absence.type as 'sickness' | 'vacation';
         });
-        setAbsenceDates(absenceMap);
+        
+        // Load time entries for analytics
+        if (uid) {
+          const { data: timeData } = await supabase
+            .from('time_entries')
+            .select('id,started_at,ended_at,paused_seconds')
+            .eq('user_id', uid)
+            .order('started_at', { ascending: false });
+          
+          if (timeData) {
+            const mapped = timeData.map((r: any) => ({
+              id: r.id,
+              start: new Date(r.started_at).getTime(),
+              end: r.ended_at ? new Date(r.ended_at).getTime() : undefined,
+              pausedSeconds: r.paused_seconds || 0,
+            }));
+            setTimeEntries(mapped);
+          }
+        }
       } else {
         // Offline/unauthenticated: provide static activities so user can backfill locally
         setBranches([]);
@@ -74,7 +89,7 @@ export default function ProfileAnalytics() {
     return () => { mounted = false; };
   }, []);
 
-  const totalSeconds = history.reduce((acc, s) => acc + Math.max(0, Math.floor(((s.end ?? Date.now()) - s.start) / 1000) - (s.pausedSeconds || 0)), 0);
+  const totalSeconds = timeEntries.reduce((acc, s) => acc + Math.max(0, Math.floor(((s.end ?? Date.now()) - s.start) / 1000) - (s.pausedSeconds || 0)), 0);
   const goal = 40 * 3600; // 40h Wochenziel default
   const progress = Math.min(100, Math.round((totalSeconds / goal) * 100));
 
@@ -110,41 +125,49 @@ export default function ProfileAnalytics() {
 
     setSaving(true);
     try {
-      if (userId) {
-        const payload: any = {
-          user_id: userId,
-          started_at: startDt.toISOString(),
-          ended_at: endDt.toISOString(),
-          paused_seconds: pausedSeconds,
-          notes: reason || null,
-          branch_id: branchId || null,
-          activity_id: activityId || null,
-        };
-        const { error } = await supabase.from('time_entries').insert(payload);
-        if (error) throw error;
-        
-        // Trigger storage event to refresh other components
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'time_entries_updated',
-          newValue: Date.now().toString()
-        }));
+      if (!userId || !supabase) {
+        toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um Zeiten nachzutragen.', variant: 'destructive' });
+        return;
+      }
+      
+      const payload: any = {
+        user_id: userId,
+        started_at: startDt.toISOString(),
+        ended_at: endDt.toISOString(),
+        paused_seconds: pausedSeconds,
+        notes: reason || null,
+        branch_id: branchId || null,
+        activity_id: activityId || null,
+      };
+      const { error } = await supabase.from('time_entries').insert(payload);
+      if (error) throw error;
+      
+      // Trigger storage event to refresh other components
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'time_entries_updated',
+        newValue: Date.now().toString()
+      }));
         
         toast({ title: 'Stunden nachgetragen', description: 'Eintrag in Supabase gespeichert.' });
-      } else {
-        // Lokal speichern, wenn nicht eingeloggt
-        const local = {
-          id: crypto.randomUUID(),
-          start: buildDateTime(date, startTime).getTime(),
-          end: buildDateTime(date, endTime).getTime(),
-          pausedSeconds,
-          branch: branches.find(b => b.id === branchId)?.name || '',
-          activity: activities.find(a => a.id === activityId)?.name || '',
-          status: 'stopped',
-        };
-        const existing = JSON.parse(localStorage.getItem('ct_history') || '[]');
-        localStorage.setItem('ct_history', JSON.stringify([local, ...existing]));
-        toast({ title: 'Lokal gespeichert', description: 'Eintrag offline abgelegt (ohne Cloud-Sync).' });
-      }
+        
+        // Load time entries to update analytics
+        if (userId) {
+          const { data: timeData } = await supabase
+            .from('time_entries')
+            .select('id,started_at,ended_at,paused_seconds')
+            .eq('user_id', userId)
+            .order('started_at', { ascending: false });
+          
+          if (timeData) {
+            const mapped = timeData.map((r: any) => ({
+              id: r.id,
+              start: new Date(r.started_at).getTime(),
+              end: r.ended_at ? new Date(r.ended_at).getTime() : undefined,
+              pausedSeconds: r.paused_seconds || 0,
+            }));
+            setTimeEntries(mapped);
+          }
+        }
       // Reset
       setReason('');
     } catch (e: any) {
@@ -236,7 +259,7 @@ export default function ProfileAnalytics() {
         <Card className="col-span-1">
           <CardHeader><CardTitle>Monat – Sessions</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{history.length}</div>
+            <div className="text-3xl font-semibold">{timeEntries.length}</div>
             <div className="text-sm text-muted-foreground">Gespeicherte Einträge</div>
           </CardContent>
         </Card>

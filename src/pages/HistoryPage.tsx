@@ -46,10 +46,14 @@ export default function HistoryPage() {
     })();
     
     // Listen for absence days updates
-    const handleStorageUpdate = () => {
-      // Force refresh of absence data when absence days are updated
-      if (user) {
-        fetchAbsenceData();
+    const handleStorageUpdate = (e: StorageEvent) => {
+      // Force refresh of data when absence days or time entries are updated
+      if (user && (e.key === 'absence_days_updated' || e.key === 'time_entries_updated')) {
+        if (e.key === 'absence_days_updated') {
+          fetchAbsenceData();
+        } else if (e.key === 'time_entries_updated') {
+          fetchTimeEntries();
+        }
       }
     };
     
@@ -82,31 +86,50 @@ export default function HistoryPage() {
     }
   };
 
+  const fetchTimeEntries = async () => {
+    if (!supabase || !user) return;
+    
+    const { data: timeData, error: timeError } = await supabase
+      .from('time_entries')
+      .select('id,started_at,ended_at,paused_seconds, branches(name), activities(name)')
+      .order('started_at', { ascending: false });
+    
+    if (!timeError && timeData) {
+      const mapped = timeData.map((r: any) => ({
+        id: r.id,
+        start: new Date(r.started_at).getTime(),
+        end: r.ended_at ? new Date(r.ended_at).getTime() : undefined,
+        pausedSeconds: r.paused_seconds || 0,
+        branch: r.branches?.name ?? '',
+        activity: r.activities?.name ?? '',
+        type: 'time_entry'
+      }));
+      setSupData(mapped);
+    }
+  };
+
   useEffect(() => {
     if (!supabase || !user) return;
     (async () => {
-      // Fetch time entries
-      const { data: timeData, error: timeError } = await supabase
-        .from('time_entries')
-        .select('id,started_at,ended_at,paused_seconds, branches(name), activities(name)')
-        .order('started_at', { ascending: false });
-      
-      if (!timeError && timeData) {
-        const mapped = timeData.map((r: any) => ({
-          id: r.id,
-          start: new Date(r.started_at).getTime(),
-          end: r.ended_at ? new Date(r.ended_at).getTime() : undefined,
-          pausedSeconds: r.paused_seconds || 0,
-          branch: r.branches?.name ?? '',
-          activity: r.activities?.name ?? '',
-          type: 'time_entry'
-        }));
-        setSupData(mapped);
-      }
-
-      // Fetch absence days
+      await fetchTimeEntries();
       await fetchAbsenceData();
     })();
+  }, [supabase, user]);
+
+  // Listen for page visibility changes to refresh data
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && supabase && user) {
+        fetchTimeEntries();
+        fetchAbsenceData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [supabase, user]);
 
   function toCsvValue(v: any) {

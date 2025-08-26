@@ -122,6 +122,13 @@ export default function ProfileAnalytics() {
         };
         const { error } = await supabase.from('time_entries').insert(payload);
         if (error) throw error;
+        
+        // Trigger storage event to refresh other components
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'time_entries_updated',
+          newValue: Date.now().toString()
+        }));
+        
         toast({ title: 'Stunden nachgetragen', description: 'Eintrag in Supabase gespeichert.' });
       } else {
         // Lokal speichern, wenn nicht eingeloggt

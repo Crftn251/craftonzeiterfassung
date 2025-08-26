@@ -188,6 +188,12 @@ export default function Track() {
       const { error } = await supabase.from('time_entries').insert(payload);
       if (error) {
         toast({ title: 'Sync fehlgeschlagen', description: error.message, variant: 'destructive' as any });
+      } else {
+        // Trigger storage event to refresh other components
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'time_entries_updated',
+          newValue: Date.now().toString()
+        }));
       }
     }
   };

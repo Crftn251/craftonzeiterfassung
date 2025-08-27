@@ -90,6 +90,8 @@ export type Database = {
           email: string | null
           id: string
           role: string
+          shopify_employee_email: string | null
+          shopify_employee_id: string | null
           updated_at: string
         }
         Insert: {
@@ -98,6 +100,8 @@ export type Database = {
           email?: string | null
           id: string
           role?: string
+          shopify_employee_email?: string | null
+          shopify_employee_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -106,6 +110,8 @@ export type Database = {
           email?: string | null
           id?: string
           role?: string
+          shopify_employee_email?: string | null
+          shopify_employee_id?: string | null
           updated_at?: string
         }
         Relationships: []

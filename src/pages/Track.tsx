@@ -8,7 +8,7 @@ import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "l
 import OnboardingWizard from "./track/OnboardingWizard";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
+const BRANCHES = ["SPZ", "SPW", "SPR", "J&C", "BÜRO", "TAL"] as const;
 const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
 
 function formatTime(totalSeconds: number) {

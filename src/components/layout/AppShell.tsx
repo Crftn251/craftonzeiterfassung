@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { BarChart3, History, Settings, ShieldCheck, LogOut, Timer, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { getSupabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 const navItems = [
   { to: "/", label: "Tracken", icon: Timer },
   { to: "/profil", label: "Profil", icon: BarChart3 },
@@ -12,7 +12,6 @@ const navItems = [
 ];
 
 export default function AppShell() {
-  const supabase = getSupabase();
   const [user, setUser] = useState<any>(null);
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
@@ -21,7 +20,6 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (!supabase) return;
     let sub: any;
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -31,7 +29,7 @@ export default function AppShell() {
       });
     })();
     return () => sub?.data?.subscription?.unsubscribe?.();
-  }, [supabase]);
+  }, []);
 
   // No automatic redirects; use explicit /login route
 
@@ -51,7 +49,7 @@ export default function AppShell() {
               </NavLink>
             ))}
             {user ? (
-              <Button variant="ghost" className="ml-2" onClick={() => supabase?.auth.signOut()}>
+              <Button variant="ghost" className="ml-2" onClick={() => supabase.auth.signOut()}>
                 <LogOut className="h-4 w-4 mr-2" /> Logout
               </Button>
             ) : (
@@ -85,7 +83,7 @@ export default function AppShell() {
           {user ? (
             <li>
               <button 
-                onClick={() => supabase?.auth.signOut()}
+                onClick={() => supabase.auth.signOut()}
                 className="flex flex-col items-center gap-1 py-2 text-xs text-muted-foreground w-full"
               >
                 <LogOut className="h-5 w-5" />

@@ -372,22 +372,63 @@ export default function Track() {
             />
           </div>
 
-          <div className="flex items-center space-x-2">
+          {/* Timer Display */}
+          <div className="text-center space-y-6 py-8">
+            <div className="relative">
+              <div className="text-7xl md:text-8xl lg:text-9xl font-mono font-light text-primary tracking-tighter leading-none drop-shadow-lg">
+                {isRunning ? formatStopwatchTime() : '00:00:00'}
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-primary/5 rounded-3xl blur-3xl -z-10 scale-110"></div>
+            </div>
+            <div className="flex items-center justify-center gap-3">
+              <div className={`w-3 h-3 rounded-full transition-all duration-300 ${isRunning ? 'bg-green-500 animate-pulse shadow-lg shadow-green-500/50' : 'bg-yellow-500 shadow-lg shadow-yellow-500/50'}`}></div>
+              <span className="text-lg font-medium text-muted-foreground">
+                {isRunning ? "Timer läuft" : "Timer pausiert"}
+              </span>
+            </div>
+          </div>
+
+          {/* Control Buttons */}
+          <div className="flex items-center justify-center space-x-4">
             {!isRunning ? (
-              <Button onClick={handleStart} disabled={!selectedBranch || !selectedActivity}>Start</Button>
+              <Button 
+                onClick={handleStart} 
+                disabled={!selectedBranch || !selectedActivity}
+                size="lg"
+                className="px-8 py-3 text-lg font-semibold"
+              >
+                Start
+              </Button>
             ) : (
               <>
                 {pauseStart ? (
-                  <Button onClick={handleResume}>Fortsetzen</Button>
+                  <Button 
+                    onClick={handleResume}
+                    size="lg"
+                    className="px-6 py-3 text-lg font-semibold"
+                  >
+                    Fortsetzen
+                  </Button>
                 ) : (
-                  <Button onClick={handlePause}>Pause</Button>
+                  <Button 
+                    onClick={handlePause}
+                    variant="secondary"
+                    size="lg"
+                    className="px-6 py-3 text-lg font-semibold"
+                  >
+                    Pause
+                  </Button>
                 )}
-                <Button variant="destructive" onClick={handleStop}>Stop</Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleStop}
+                  size="lg"
+                  className="px-6 py-3 text-lg font-semibold"
+                >
+                  Stop
+                </Button>
               </>
             )}
-            <div className="text-lg font-semibold">
-              {isRunning ? formatStopwatchTime() : '00:00:00'}
-            </div>
           </div>
         </CardContent>
       </Card>

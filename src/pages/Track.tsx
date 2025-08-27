@@ -9,7 +9,7 @@ import OnboardingWizard from "./track/OnboardingWizard";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 const BRANCHES = ["SPZ", "SPW", "SPR", "J&C", "BÜRO", "TAL"] as const;
-const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
+const ACTIVITIES = ["Ordnung", "Verkauf", "OLS", "Social Media", "Meeting", "Ware"] as const;
 
 function formatTime(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');

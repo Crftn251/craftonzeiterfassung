@@ -7,14 +7,17 @@ import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "l
 import OnboardingWizard from "./track/OnboardingWizard";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+
 const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
 const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
+
 function formatTime(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
   const m = Math.floor(totalSeconds % 3600 / 60).toString().padStart(2, '0');
   const s = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
   return `${h}:${m}:${s}`;
 }
+
 type SessionRecord = {
   id: string;
   start: number; // epoch ms
@@ -24,6 +27,7 @@ type SessionRecord = {
   activity: string;
   status: 'running' | 'paused' | 'stopped';
 };
+
 export default function Track() {
   const [branch, setBranch] = useState<string>(() => localStorage.getItem('ct_branch') || "");
   const [activity, setActivity] = useState<string>(() => localStorage.getItem('ct_activity') || "");
@@ -32,15 +36,19 @@ export default function Track() {
     return raw ? JSON.parse(raw) as SessionRecord : null;
   });
   const [offline, setOffline] = useState<boolean>(() => !navigator.onLine);
+  
   // optimized: lightweight tick state (no session rewrite)
   const [tick, setTick] = useState(0);
   const tickRef = useRef<number | null>(null);
+  
   const [user, setUser] = useState<any>(null);
   const [branchOptions, setBranchOptions] = useState<string[]>([...BRANCHES] as unknown as string[]);
   const [activityOptions, setActivityOptions] = useState<string[]>([...ACTIVITIES] as unknown as string[]);
+  const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
   const branchIdByName = useRef<Record<string, string>>({});
   const activityIdByName = useRef<Record<string, string>>({});
   const [todayAbsence, setTodayAbsence] = useState<string | null>(null);
+
   const elapsed = useMemo(() => {
     if (!session) return 0;
     const now = Date.now();
@@ -48,6 +56,13 @@ export default function Track() {
     const total = Math.max(0, Math.floor((end - session.start) / 1000) - session.pausedSeconds);
     return total;
   }, [session, tick]);
+
+  // Filter activities based on selected branch
+  const filteredActivities = useMemo(() => {
+    if (!branch) return activityOptions;
+    return branchActivities[branch] || activityOptions;
+  }, [branch, branchActivities, activityOptions]);
+
   useEffect(() => {
     const onOnline = () => setOffline(false);
     const onOffline = () => setOffline(true);
@@ -58,6 +73,7 @@ export default function Track() {
       window.removeEventListener('offline', onOffline);
     };
   }, []);
+
   useEffect(() => {
     if (session && session.status === 'running') {
       tickRef.current = window.setInterval(() => {
@@ -68,6 +84,7 @@ export default function Track() {
       if (tickRef.current) window.clearInterval(tickRef.current);
     };
   }, [session?.status]);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -81,42 +98,77 @@ export default function Track() {
 
     return () => subscription.unsubscribe();
   }, []);
+
   useEffect(() => {
     (async () => {
-      const {
-        data: b
-      } = await supabase.from('branches').select('id,name').order('name');
+      const { data: b } = await supabase.from('branches').select('id,name').order('name');
       if (b) {
         setBranchOptions(b.map(x => x.name));
         branchIdByName.current = Object.fromEntries(b.map(x => [x.name, x.id]));
       }
-      const {
-        data: a
-      } = await supabase.from('activities').select('id,name').order('name');
+
+      const { data: a } = await supabase.from('activities').select('id,name').order('name');
       if (a) {
         setActivityOptions(a.map(x => x.name));
         activityIdByName.current = Object.fromEntries(a.map(x => [x.name, x.id]));
       }
 
+      // Load branch-activity assignments
+      const { data: assignments } = await supabase
+        .from('branch_activities')
+        .select(`
+          branches!inner(name),
+          activities!inner(name)
+        `);
+
+      if (assignments) {
+        const branchActivityMap: Record<string, string[]> = {};
+        assignments.forEach((assignment: any) => {
+          const branchName = assignment.branches.name;
+          const activityName = assignment.activities.name;
+          
+          if (!branchActivityMap[branchName]) {
+            branchActivityMap[branchName] = [];
+          }
+          branchActivityMap[branchName].push(activityName);
+        });
+        setBranchActivities(branchActivityMap);
+      }
+
       // Check if today is marked as absence day
       if (user) {
         const today = format(new Date(), 'yyyy-MM-dd');
-        const {
-          data: absence
-        } = await supabase.from('absence_days').select('type').eq('user_id', user.id).eq('date', today).maybeSingle();
+        const { data: absence } = await supabase
+          .from('absence_days')
+          .select('type')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle();
         setTodayAbsence(absence?.type || null);
       }
     })();
   }, [user]);
+
   useEffect(() => {
     localStorage.setItem('ct_branch', branch);
   }, [branch]);
+
   useEffect(() => {
     localStorage.setItem('ct_activity', activity);
   }, [activity]);
+
   useEffect(() => {
-    if (session) localStorage.setItem('ct_session', JSON.stringify(session));else localStorage.removeItem('ct_session');
+    if (session) localStorage.setItem('ct_session', JSON.stringify(session));
+    else localStorage.removeItem('ct_session');
   }, [session]);
+
+  // Reset activity if it's not available for the selected branch
+  useEffect(() => {
+    if (branch && activity && !filteredActivities.includes(activity)) {
+      setActivity("");
+    }
+  }, [branch, activity, filteredActivities]);
+
   const start = () => {
     if (!user) {
       toast({
@@ -152,6 +204,7 @@ export default function Track() {
     };
     setSession(s);
   };
+
   const pause = () => {
     if (!session) return;
     if (session.status === 'paused') {
@@ -175,7 +228,6 @@ export default function Track() {
     }
   };
 
-  // Persist a finished session only in Supabase
   const persistFinished = async (finished: SessionRecord) => {
     if (!user) {
       toast({
@@ -195,9 +247,7 @@ export default function Track() {
     const aid = activityIdByName.current[finished.activity];
     if (bid) payload.branch_id = bid;
     if (aid) payload.activity_id = aid;
-    const {
-      error
-    } = await supabase.from('time_entries').insert(payload);
+    const{ error } = await supabase.from('time_entries').insert(payload);
     if (error) {
       toast({
         title: 'Speichern fehlgeschlagen',
@@ -213,6 +263,7 @@ export default function Track() {
       newValue: Date.now().toString()
     }));
   };
+
   const stop = async () => {
     if (!session) return;
     const now = Date.now();
@@ -235,6 +286,7 @@ export default function Track() {
       description: 'Abschnitt gespeichert.'
     });
   };
+
   const handleChangeBranch = async (nextBranch: string) => {
     if (session && (session.status === 'running' || session.status === 'paused')) {
       const now = Date.now();
@@ -273,6 +325,7 @@ export default function Track() {
       setBranch(nextBranch);
     }
   };
+
   const handleChangeActivity = async (nextActivity: string) => {
     if (session && (session.status === 'running' || session.status === 'paused')) {
       const now = Date.now();
@@ -311,15 +364,14 @@ export default function Track() {
       setActivity(nextActivity);
     }
   };
+
   useEffect(() => {
     document.title = 'Tracken – Crafton Time';
     const meta = document.querySelector('meta[name="description"]');
     if (meta) meta.setAttribute('content', 'Arbeitszeit start/stop/pause – schnelle Erfassung und sichere Speicherung.');
   }, []);
-  const status: {
-    label: string;
-    variant: "default" | "secondary" | "destructive";
-  } = !session ? {
+
+  const status: { label: string; variant: "default" | "secondary" | "destructive"; } = !session ? {
     label: 'Bereit',
     variant: 'secondary'
   } : session.status === 'paused' ? {
@@ -329,27 +381,46 @@ export default function Track() {
     label: 'Läuft',
     variant: 'default'
   };
+
   const showWizard = (!branch || !activity) && !session;
-  return <section className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-[1fr,420px]">
-      {offline && <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-secondary">
-          <div className="flex items-center gap-2"><WifiOff className="h-4 w-4" /> Offline – Timer läuft serverseitig weiter (geplant).</div>
-        </div>}
+
+  return (
+    <section className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-[1fr,420px]">
+      {offline && (
+        <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-secondary">
+          <div className="flex items-center gap-2">
+            <WifiOff className="h-4 w-4" /> Offline – Timer läuft serverseitig weiter (geplant).
+          </div>
+        </div>
+      )}
       
-      {todayAbsence && <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-red-50 border-red-200">
+      {todayAbsence && (
+        <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-red-50 border-red-200">
           <div className="flex items-center gap-2 text-red-700">
             <span className="font-semibold">
               {todayAbsence === 'sickness' ? 'K' : 'U'}
             </span>
             Heute ist als {todayAbsence === 'sickness' ? 'Krankheitstag' : 'Urlaubstag'} markiert. Zeiterfassung blockiert.
           </div>
-        </div>}
+        </div>
+      )}
 
-      {showWizard ? <article className="md:col-span-2 rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
+      {showWizard ? (
+        <article className="md:col-span-2 rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
           <header className="mb-4">
             <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker Onboarding</h1>
           </header>
-          <OnboardingWizard branches={branchOptions as unknown as readonly string[]} activities={activityOptions as unknown as readonly string[]} branch={branch} activity={activity} onChangeBranch={setBranch} onChangeActivity={setActivity} />
-        </article> : <>
+          <OnboardingWizard 
+            branches={branchOptions as unknown as readonly string[]} 
+            activities={filteredActivities as unknown as readonly string[]} 
+            branch={branch} 
+            activity={activity} 
+            onChangeBranch={setBranch} 
+            onChangeActivity={setActivity} 
+          />
+        </article>
+      ) : (
+        <>
           <article className="rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
             <header className="mb-4 flex items-center justify-between">
               <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker</h1>
@@ -358,36 +429,67 @@ export default function Track() {
 
             {/* Zeit – pur */}
             <div className="my-10 flex items-center justify-center">
-              <div className="font-bold font-mono tabular-nums tracking-tight text-[clamp(2.75rem,12vw,6rem)] sm:text-[clamp(3.5rem,10vw,7rem)] md:text-[clamp(4rem,8vw,8rem)]" role="status" aria-live="polite">
+              <div 
+                className="font-bold font-mono tabular-nums tracking-tight text-[clamp(2.75rem,12vw,6rem)] sm:text-[clamp(3.5rem,10vw,7rem)] md:text-[clamp(4rem,8vw,8rem)]" 
+                role="status" 
+                aria-live="polite"
+              >
                 {formatTime(elapsed)}
               </div>
             </div>
 
             {/* Controls (ohne Hover-Animation) */}
             <div className="flex flex-wrap items-center justify-center gap-3">
-              {!session && <Button size="lg" onClick={start} className="w-full sm:w-auto min-w-[140px]" disabled={!!todayAbsence}>
+              {!session && (
+                <Button 
+                  size="lg" 
+                  onClick={start} 
+                  className="w-full sm:w-auto min-w-[140px]" 
+                  disabled={!!todayAbsence}
+                >
                   <Play className="mr-2 h-4 w-4" /> Start
-                </Button>}
-              {session && <Button size="lg" variant="secondary" onClick={pause} className="w-full sm:w-auto min-w-[140px]">
-                  {session.status === 'paused' ? <><RefreshCw className="mr-2 h-4 w-4" /> Weiter</> : <><Pause className="mr-2 h-4 w-4" /> Pause</>}
-                </Button>}
-              {session && <AlertDialog>
+                </Button>
+              )}
+              {session && (
+                <Button 
+                  size="lg" 
+                  variant="secondary" 
+                  onClick={pause} 
+                  className="w-full sm:w-auto min-w-[140px]"
+                >
+                  {session.status === 'paused' ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" /> Weiter
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="mr-2 h-4 w-4" /> Pause
+                    </>
+                  )}
+                </Button>
+              )}
+              {session && (
+                <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button size="lg" variant="destructive" className="w-full sm:w-auto min-w-[140px]">
+                    <Button 
+                      size="lg" 
+                      variant="destructive" 
+                      className="w-full sm:w-auto min-w-[140px]"
+                    >
                       <Square className="mr-2 h-4 w-4" /> Stop
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Session beenden?</AlertDialogTitle>
-                      
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Abbrechen</AlertDialogCancel>
                       <AlertDialogAction onClick={stop}>Beenden</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
-                </AlertDialog>}
+                </AlertDialog>
+              )}
             </div>
           </article>
 
@@ -398,17 +500,35 @@ export default function Track() {
               <div className="grid gap-4">
                 <h3 className="text-xl font-medium">Wo arbeitest du?</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {(branchOptions.length > 0 ? branchOptions : BRANCHES).map(b => <Button key={b} type="button" variant={branch === b ? "default" : "outline"} className="h-auto py-4 px-4 justify-center" aria-pressed={branch === b} onClick={() => handleChangeBranch(b)}>
+                  {(branchOptions.length > 0 ? branchOptions : BRANCHES).map(b => (
+                    <Button 
+                      key={b} 
+                      type="button" 
+                      variant={branch === b ? "default" : "outline"} 
+                      className="h-auto py-4 px-4 justify-center" 
+                      aria-pressed={branch === b} 
+                      onClick={() => handleChangeBranch(b)}
+                    >
                       {b}
-                    </Button>)}
+                    </Button>
+                  ))}
                 </div>
               </div>
               <div className="grid gap-4">
                 <h3 className="text-xl font-medium">Was machst du?</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {activityOptions.map(a => <Button key={a} type="button" variant={activity === a ? "default" : "outline"} className="h-auto py-4 px-4 justify-center" aria-pressed={activity === a} onClick={() => handleChangeActivity(a)}>
+                  {filteredActivities.map(a => (
+                    <Button 
+                      key={a} 
+                      type="button" 
+                      variant={activity === a ? "default" : "outline"} 
+                      className="h-auto py-4 px-4 justify-center" 
+                      aria-pressed={activity === a} 
+                      onClick={() => handleChangeActivity(a)}
+                    >
                       {a}
-                    </Button>)}
+                    </Button>
+                  ))}
                 </div>
               </div>
               <div className="rounded-lg border p-3 text-sm bg-secondary/60">
@@ -421,6 +541,8 @@ export default function Track() {
               </div>
             </div>
           </aside>
-        </>}
-    </section>;
+        </>
+      )}
+    </section>
+  );
 }

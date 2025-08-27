@@ -6,7 +6,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "lucide-react";
 import OnboardingWizard from "./track/OnboardingWizard";
-import { getSupabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
 const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
@@ -40,7 +40,6 @@ export default function Track() {
   const [tick, setTick] = useState(0);
 
   const tickRef = useRef<number | null>(null);
-  const supabase = getSupabase();
   const [user, setUser] = useState<any>(null);
   const [branchOptions, setBranchOptions] = useState<string[]>([...BRANCHES] as unknown as string[]);
   const [activityOptions, setActivityOptions] = useState<string[]>([...ACTIVITIES] as unknown as string[]);
@@ -74,7 +73,6 @@ export default function Track() {
   }, [session?.status]);
 
   useEffect(() => {
-    if (!supabase) return;
     let sub: any;
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -82,10 +80,9 @@ export default function Track() {
       sub = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
     })();
     return () => sub?.data?.subscription?.unsubscribe?.();
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
-    if (!supabase) return;
     (async () => {
       const { data: b } = await supabase.from('branches').select('id,name').order('name');
       if (b) {
@@ -111,7 +108,7 @@ export default function Track() {
         setTodayAbsence(absence?.type || null);
       }
     })();
-  }, [supabase, user]);
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('ct_branch', branch);
@@ -127,7 +124,7 @@ export default function Track() {
   }, [session]);
 
   const start = () => {
-    if (!supabase || !user) {
+    if (!user) {
       toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um die Zeiterfassung zu nutzen.', variant: 'destructive' });
       return;
     }
@@ -176,7 +173,7 @@ export default function Track() {
 
   // Persist a finished session only in Supabase
   const persistFinished = async (finished: SessionRecord) => {
-    if (!supabase || !user) {
+    if (!user) {
       toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um Zeiten zu speichern.', variant: 'destructive' });
       return;
     }

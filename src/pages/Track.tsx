@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,18 +15,18 @@ import { Calendar } from "@/components/ui/calendar"
 import { CalendarIcon } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import BranchManager from "./BranchManager";
-import ActivityManager from "./ActivityManager";
-import AssignmentManager from "./AssignmentManager";
+import BranchManager from "./track/BranchManager";
+import ActivityManager from "./track/ActivityManager";
+import AssignmentManager from "./track/AssignmentManager";
 
 interface TimeEntry {
   id: string;
   branch_id: string | null;
   activity_id: string | null;
-  start_time: string;
-  end_time: string | null;
+  started_at: string;
+  ended_at: string | null;
   paused_seconds: number;
-  note: string | null;
+  notes: string | null;
 }
 
 export default function Track() {
@@ -93,14 +94,17 @@ export default function Track() {
       const startOfDay = `${today}T00:00:00+00:00`;
       const endOfDay = `${today}T23:59:59+00:00`;
 
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
       const { data: timeEntries, error } = await supabase
         .from('time_entries')
         .select('*')
-        .eq('user_id', supabase.auth.currentUser?.uid)
-        .is('end_time', null)
-        .gte('start_time', startOfDay)
-        .lte('start_time', endOfDay)
-        .order('start_time', { ascending: false })
+        .eq('user_id', user.user.id)
+        .is('ended_at', null)
+        .gte('started_at', startOfDay)
+        .lte('started_at', endOfDay)
+        .order('started_at', { ascending: false })
         .limit(1);
 
       if (error) {
@@ -117,11 +121,11 @@ export default function Track() {
         setSelectedActivity(
           allActivities.find((activity) => activity === runningEntry.activity_id) || null
         );
-        setNote(runningEntry.note || "");
-        setStartTime(new Date(runningEntry.start_time));
+        setNote(runningEntry.notes || "");
+        setStartTime(new Date(runningEntry.started_at));
         setPausedSeconds(runningEntry.paused_seconds);
 
-        const diff = new Date().getTime() - new Date(runningEntry.start_time).getTime();
+        const diff = new Date().getTime() - new Date(runningEntry.started_at).getTime();
         stopwatch.setTime(diff - (runningEntry.paused_seconds * 1000));
         
         setIsRunning(true);
@@ -134,6 +138,7 @@ export default function Track() {
 
   const handleBranchChange = (branch: string) => {
     setSelectedBranch(branch);
+    setSelectedActivity(null); // Reset activity when branch changes
   };
 
   const handleActivityChange = (activity: string) => {
@@ -142,7 +147,7 @@ export default function Track() {
 
   const handleStart = async () => {
     if (!selectedBranch || !selectedActivity) {
-      toast({ title: 'Hinweis', description: 'Bitte Branch und Tätigkeit auswählen', variant: 'warning' });
+      toast({ title: 'Hinweis', description: 'Bitte Branch und Tätigkeit auswählen', variant: 'destructive' });
       return;
     }
 
@@ -167,15 +172,21 @@ export default function Track() {
       return;
     }
 
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) {
+      toast({ title: 'Fehler', description: 'Benutzer nicht authentifiziert', variant: 'destructive' });
+      return;
+    }
+
     const { data: timeEntry, error } = await supabase
       .from('time_entries')
       .insert({
         branch_id: branchData.id,
         activity_id: activityData.id,
-        start_time: new Date().toISOString(),
-        note: note,
+        started_at: new Date().toISOString(),
+        notes: note,
         paused_seconds: 0,
-        user_id: supabase.auth.currentUser?.uid
+        user_id: user.user.id
       })
       .select()
       .single();
@@ -197,7 +208,7 @@ export default function Track() {
     const { error } = await supabase
       .from('time_entries')
       .update({
-        end_time: new Date().toISOString()
+        ended_at: new Date().toISOString()
       })
       .eq('id', timeEntryId);
 
@@ -251,11 +262,11 @@ export default function Track() {
       supabase
         .from('time_entries')
         .update({
-          note: e.target.value
+          notes: e.target.value
         })
         .eq('id', timeEntryId)
         .then(() => console.log('Note updated in DB'))
-        .catch(error => toast({ title: 'Fehler', description: error.message, variant: 'destructive' }));
+        .catch((error) => toast({ title: 'Fehler', description: error.message, variant: 'destructive' }));
     }
   };
 
@@ -308,7 +319,7 @@ export default function Track() {
             </div>
             <div>
               <Label htmlFor="branch">Branch</Label>
-              <Select onValueChange={handleBranchChange}>
+              <Select value={selectedBranch || ""} onValueChange={handleBranchChange}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Branch wählen" />
                 </SelectTrigger>
@@ -324,7 +335,7 @@ export default function Track() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="activity">Tätigkeit</Label>
-              <Select onValueChange={handleActivityChange}>
+              <Select value={selectedActivity || ""} onValueChange={handleActivityChange} disabled={!selectedBranch}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Tätigkeit wählen" />
                 </SelectTrigger>

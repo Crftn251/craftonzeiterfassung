@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,9 +14,9 @@ import { Calendar } from "@/components/ui/calendar"
 import { CalendarIcon } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import BranchManager from "./track/BranchManager";
-import ActivityManager from "./track/ActivityManager";
-import AssignmentManager from "./track/AssignmentManager";
+import BranchManager from "@/pages/track/BranchManager";
+import ActivityManager from "@/pages/track/ActivityManager";
+import AssignmentManager from "@/pages/track/AssignmentManager";
 
 interface TimeEntry {
   id: string;
@@ -44,6 +43,14 @@ export default function Track() {
   const [date, setDate] = useState<Date | undefined>(new Date());
 
   const stopwatch = useStopwatch({ autoStart: false });
+
+  const formatStopwatchTime = () => {
+    const totalSeconds = Math.floor(stopwatch.totalSeconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   const loadData = useCallback(async () => {
     console.log("Loading branches and activities...");
@@ -126,10 +133,10 @@ export default function Track() {
         setPausedSeconds(runningEntry.paused_seconds);
 
         const diff = new Date().getTime() - new Date(runningEntry.started_at).getTime();
-        stopwatch.setTime(diff - (runningEntry.paused_seconds * 1000));
+        const offsetTimestamp = new Date(Date.now() + diff - (runningEntry.paused_seconds * 1000));
+        stopwatch.reset(offsetTimestamp, true);
         
         setIsRunning(true);
-        stopwatch.start();
       }
     };
 
@@ -215,7 +222,7 @@ export default function Track() {
     if (error) {
       toast({ title: 'Fehler', description: error.message, variant: 'destructive' });
       setIsRunning(true);
-      stopwatch.resume();
+      stopwatch.start();
       return;
     }
 
@@ -234,7 +241,7 @@ export default function Track() {
 
   const handleResume = async () => {
     setIsRunning(true);
-    stopwatch.resume();
+    stopwatch.start();
 
     const pauseDuration = Math.floor((new Date().getTime() - new Date(pauseStart!).getTime()) / 1000);
     setPausedSeconds(pausedSeconds + pauseDuration);
@@ -255,18 +262,21 @@ export default function Track() {
     }
   };
 
-  const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleNoteChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNote(e.target.value);
 
     if (timeEntryId) {
-      supabase
-        .from('time_entries')
-        .update({
-          notes: e.target.value
-        })
-        .eq('id', timeEntryId)
-        .then(() => console.log('Note updated in DB'))
-        .catch((error) => toast({ title: 'Fehler', description: error.message, variant: 'destructive' }));
+      try {
+        await supabase
+          .from('time_entries')
+          .update({
+            notes: e.target.value
+          })
+          .eq('id', timeEntryId);
+        console.log('Note updated in DB');
+      } catch (error: any) {
+        toast({ title: 'Fehler', description: error.message, variant: 'destructive' });
+      }
     }
   };
 
@@ -376,7 +386,7 @@ export default function Track() {
               </>
             )}
             <div className="text-lg font-semibold">
-              {isRunning ? stopwatch.formatTime() : '00:00:00'}
+              {isRunning ? formatStopwatchTime() : '00:00:00'}
             </div>
           </div>
         </CardContent>

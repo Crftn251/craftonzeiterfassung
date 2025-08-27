@@ -441,7 +441,7 @@ export default function Track() {
                   size="lg" 
                   onClick={start} 
                   className="w-full sm:w-auto min-w-[140px]"
-                  disabled={!!todayAbsence}
+                  disabled={!!todayAbsence || !branch || !activity}
                 >
                   <Play className="mr-2 h-4 w-4" /> Start
                 </Button>

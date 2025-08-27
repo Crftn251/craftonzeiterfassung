@@ -6,6 +6,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "lucide-react";
 import OnboardingWizard from "./track/OnboardingWizard";
+import BranchManager from "./track/BranchManager";
+import ActivityManager from "./track/ActivityManager";
+import AssignmentManager from "./track/AssignmentManager";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 const BRANCHES = ["SPZ", "SPW", "SPR", "J&C", "BÜRO", "TAL"] as const;
@@ -41,6 +44,7 @@ export default function Track() {
 
   const tickRef = useRef<number | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [branchOptions, setBranchOptions] = useState<string[]>([...BRANCHES] as unknown as string[]);
   const [activityOptions, setActivityOptions] = useState<string[]>([...ACTIVITIES] as unknown as string[]);
   const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
@@ -56,11 +60,11 @@ export default function Track() {
     return total;
   }, [session, tick]);
 
-  // Get activities for current branch
+  // Get activities for current branch - only show mapped activities, no fallback
   const currentActivities = useMemo(() => {
-    if (!branch) return activityOptions;
-    return branchActivities[branch] || activityOptions;
-  }, [branch, branchActivities, activityOptions]);
+    if (!branch) return [];
+    return branchActivities[branch] || [];
+  }, [branch, branchActivities]);
 
   useEffect(() => {
     const onOnline = () => setOffline(false);
@@ -84,45 +88,90 @@ export default function Track() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       setUser(data.user ?? null);
-      sub = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
+      
+      // Check if user is admin
+      if (data.user) {
+        const { data: isAdminResult } = await supabase
+          .rpc('is_admin', { uid: data.user.id });
+        setIsAdmin(!!isAdminResult);
+      }
+      
+      sub = supabase.auth.onAuthStateChange(async (_e, session) => {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          const { data: isAdminResult } = await supabase
+            .rpc('is_admin', { uid: session.user.id });
+          setIsAdmin(!!isAdminResult);
+        } else {
+          setIsAdmin(false);
+        }
+      });
     })();
     return () => sub?.data?.subscription?.unsubscribe?.();
   }, []);
 
+  const refreshData = async () => {
+    const { data: b } = await supabase.from('branches').select('id,name').order('name');
+    if (b) {
+      setBranchOptions(b.map(x => x.name));
+      branchIdByName.current = Object.fromEntries(b.map(x => [x.name, x.id]));
+    }
+    const { data: a } = await supabase.from('activities').select('id,name').order('name');
+    if (a) {
+      setActivityOptions(a.map(x => x.name));
+      activityIdByName.current = Object.fromEntries(a.map(x => [x.name, x.id]));
+    }
+
+    // Load branch-specific activities
+    const { data: branchActivitiesData } = await supabase
+      .from('branch_activities')
+      .select(`
+        branches!inner(name),
+        activities!inner(name)
+      `);
+    
+    if (branchActivitiesData) {
+      const branchActivityMap: Record<string, string[]> = {};
+      branchActivitiesData.forEach((item: any) => {
+        const branchName = item.branches.name;
+        const activityName = item.activities.name;
+        
+        if (!branchActivityMap[branchName]) {
+          branchActivityMap[branchName] = [];
+        }
+        branchActivityMap[branchName].push(activityName);
+      });
+      setBranchActivities(branchActivityMap);
+    }
+    
+    // Check if current branch still exists, if not clear it
+    if (branch && b && !b.some(br => br.name === branch)) {
+      setBranch('');
+      setActivity('');
+    }
+    
+    // Check if current activity still exists for current branch
+    if (activity && branch && branchActivitiesData) {
+      const branchActivityMap: Record<string, string[]> = {};
+      branchActivitiesData.forEach((item: any) => {
+        const branchName = item.branches.name;
+        const activityName = item.activities.name;
+        
+        if (!branchActivityMap[branchName]) {
+          branchActivityMap[branchName] = [];
+        }
+        branchActivityMap[branchName].push(activityName);
+      });
+      
+      if (!branchActivityMap[branch]?.includes(activity)) {
+        setActivity('');
+      }
+    }
+  };
+
   useEffect(() => {
     (async () => {
-      const { data: b } = await supabase.from('branches').select('id,name').order('name');
-      if (b) {
-        setBranchOptions(b.map(x => x.name));
-        branchIdByName.current = Object.fromEntries(b.map(x => [x.name, x.id]));
-      }
-      const { data: a } = await supabase.from('activities').select('id,name').order('name');
-      if (a) {
-        setActivityOptions(a.map(x => x.name));
-        activityIdByName.current = Object.fromEntries(a.map(x => [x.name, x.id]));
-      }
-
-      // Load branch-specific activities
-      const { data: branchActivitiesData } = await supabase
-        .from('branch_activities')
-        .select(`
-          branches!inner(name),
-          activities!inner(name)
-        `);
-      
-      if (branchActivitiesData) {
-        const branchActivityMap: Record<string, string[]> = {};
-        branchActivitiesData.forEach((item: any) => {
-          const branchName = item.branches.name;
-          const activityName = item.activities.name;
-          
-          if (!branchActivityMap[branchName]) {
-            branchActivityMap[branchName] = [];
-          }
-          branchActivityMap[branchName].push(activityName);
-        });
-        setBranchActivities(branchActivityMap);
-      }
+      await refreshData();
       
       // Check if today is marked as absence day
       if (user) {
@@ -262,7 +311,7 @@ export default function Track() {
       setBranch(nextBranch);
       
       // Clear activity if it's not available for the new branch
-      const newBranchActivities = branchActivities[nextBranch] || activityOptions;
+      const newBranchActivities = branchActivities[nextBranch] || [];
       if (!newBranchActivities.includes(activity)) {
         setActivity('');
       }
@@ -284,7 +333,7 @@ export default function Track() {
       setBranch(nextBranch);
       
       // Clear activity if it's not available for the new branch
-      const newBranchActivities = branchActivities[nextBranch] || activityOptions;
+      const newBranchActivities = branchActivities[nextBranch] || [];
       if (!newBranchActivities.includes(activity)) {
         setActivity('');
       }
@@ -472,6 +521,31 @@ export default function Track() {
                   <Briefcase className="h-4 w-4" /> <span>{activity || "Keine Tätigkeit"}</span>
                 </div>
               </div>
+              
+              {/* Admin Management Tools */}
+              {isAdmin && (
+                <div className="space-y-2 pt-4 border-t">
+                  <h4 className="text-sm font-medium text-muted-foreground">Admin-Bereich</h4>
+                  <div className="flex flex-col gap-2">
+                    <BranchManager 
+                      branches={branchOptions}
+                      onRefresh={refreshData}
+                    />
+                    <ActivityManager 
+                      activities={activityOptions}
+                      onRefresh={refreshData}
+                    />
+                    {branch && (
+                      <AssignmentManager 
+                        currentBranch={branch}
+                        branchActivities={branchActivities}
+                        allActivities={activityOptions}
+                        onRefresh={refreshData}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </aside>
         </>

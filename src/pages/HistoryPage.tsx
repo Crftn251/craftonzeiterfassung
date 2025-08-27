@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { getSupabase } from "@/lib/supabaseClient";
+import { Clock, CalendarX } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 function fmt(ts: number) {
   const d = new Date(ts);
   return d.toLocaleString();
@@ -22,7 +24,7 @@ export default function HistoryPage() {
     if (meta) meta.setAttribute('content', 'Alle Sessions als Tabelle – filter- und exportierbar (bald).');
   }, []);
 
-  const supabase = getSupabase();
+  
   const [user, setUser] = useState<any>(null);
   const [supData, setSupData] = useState<any[]>([]);
   const [absenceData, setAbsenceData] = useState<any[]>([]);
@@ -33,13 +35,15 @@ export default function HistoryPage() {
     return allEntries.sort((a, b) => (b.start || b.date) - (a.start || a.date));
   }, [supData, absenceData]);
   useEffect(() => {
-    if (!supabase) return;
-    let sub: any;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user ?? null);
-      sub = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
-    })();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
     
     // Listen for absence days updates
     const handleStorageUpdate = (e: StorageEvent) => {
@@ -56,13 +60,13 @@ export default function HistoryPage() {
     window.addEventListener('storage', handleStorageUpdate);
     
     return () => {
-      sub?.data?.subscription?.unsubscribe?.();
+      subscription.unsubscribe();
       window.removeEventListener('storage', handleStorageUpdate);
     };
-  }, [supabase, user]);
+  }, [user]);
 
   const fetchAbsenceData = async () => {
-    if (!supabase || !user) return;
+    if (!user) return;
     
     const { data: absenceDataResult, error: absenceError } = await supabase
       .from('absence_days')
@@ -83,7 +87,7 @@ export default function HistoryPage() {
   };
 
   const fetchTimeEntries = async () => {
-    if (!supabase || !user) return;
+    if (!user) return;
     
     const { data: timeData, error: timeError } = await supabase
       .from('time_entries')
@@ -105,17 +109,17 @@ export default function HistoryPage() {
   };
 
   useEffect(() => {
-    if (!supabase || !user) return;
+    if (!user) return;
     (async () => {
       await fetchTimeEntries();
       await fetchAbsenceData();
     })();
-  }, [supabase, user]);
+  }, [user]);
 
   // Listen for page visibility changes to refresh data
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && supabase && user) {
+      if (!document.hidden && user) {
         fetchTimeEntries();
         fetchAbsenceData();
       }
@@ -126,7 +130,7 @@ export default function HistoryPage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [supabase, user]);
+  }, [user]);
 
   function toCsvValue(v: any) {
     const s = String(v ?? "");
@@ -142,9 +146,10 @@ export default function HistoryPage() {
       return;
     }
     
-    const header = ["Datum","Filiale","Tätigkeit","Start","Ende","Pause(min)","Netto(HH:MM)"];
+    const header = ["Datum","Typ","Filiale","Tätigkeit","Start","Ende","Pause(min)","Netto(HH:MM)"];
     const rows = data.map((s: any) => [
       new Date(s.start || s.date).toLocaleDateString(),
+      s.type === 'absence' ? `Abwesenheit (${s.branch})` : 'Zeit',
       s.branch ?? "",
       s.activity ?? "",
       s.type === 'absence' ? '—' : fmt(s.start),
@@ -174,6 +179,7 @@ export default function HistoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Datum</TableHead>
+                <TableHead>Typ</TableHead>
                 <TableHead>Filiale</TableHead>
                 <TableHead>Tätigkeit</TableHead>
                 <TableHead>Start</TableHead>
@@ -186,6 +192,19 @@ export default function HistoryPage() {
               {data.map((s: any) => (
                 <TableRow key={s.id}>
                   <TableCell>{new Date(s.start || s.date).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    {s.type === 'absence' ? (
+                      <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                        <CalendarX className="h-3 w-3" />
+                        Abwesenheit ({s.branch})
+                      </Badge>
+                    ) : (
+                      <Badge variant="default" className="flex items-center gap-1 w-fit">
+                        <Clock className="h-3 w-3" />
+                        Zeit
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>{s.branch}</TableCell>
                   <TableCell>{s.activity}</TableCell>
                   <TableCell>
@@ -204,7 +223,7 @@ export default function HistoryPage() {
               ))}
               {data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">Noch keine Einträge</TableCell>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">Noch keine Einträge</TableCell>
                 </TableRow>
               )}
             </TableBody>

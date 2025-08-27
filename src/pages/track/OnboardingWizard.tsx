@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -47,11 +48,6 @@ export default function OnboardingWizard({
                 {b}
               </Button>
             ))}
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={() => setStep(2)} disabled={!branch}>
-              Weiter
-            </Button>
           </div>
         </div>
       )}

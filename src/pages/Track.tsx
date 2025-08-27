@@ -43,6 +43,7 @@ export default function Track() {
   const [user, setUser] = useState<any>(null);
   const [branchOptions, setBranchOptions] = useState<string[]>([...BRANCHES] as unknown as string[]);
   const [activityOptions, setActivityOptions] = useState<string[]>([...ACTIVITIES] as unknown as string[]);
+  const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
   const branchIdByName = useRef<Record<string, string>>({});
   const activityIdByName = useRef<Record<string, string>>({});
   const [todayAbsence, setTodayAbsence] = useState<string | null>(null);
@@ -54,6 +55,12 @@ export default function Track() {
     const total = Math.max(0, Math.floor((end - session.start) / 1000) - session.pausedSeconds);
     return total;
   }, [session, tick]);
+
+  // Get activities for current branch
+  const currentActivities = useMemo(() => {
+    if (!branch) return activityOptions;
+    return branchActivities[branch] || activityOptions;
+  }, [branch, branchActivities, activityOptions]);
 
   useEffect(() => {
     const onOnline = () => setOffline(false);
@@ -93,6 +100,28 @@ export default function Track() {
       if (a) {
         setActivityOptions(a.map(x => x.name));
         activityIdByName.current = Object.fromEntries(a.map(x => [x.name, x.id]));
+      }
+
+      // Load branch-specific activities
+      const { data: branchActivitiesData } = await supabase
+        .from('branch_activities')
+        .select(`
+          branches!inner(name),
+          activities!inner(name)
+        `);
+      
+      if (branchActivitiesData) {
+        const branchActivityMap: Record<string, string[]> = {};
+        branchActivitiesData.forEach((item: any) => {
+          const branchName = item.branches.name;
+          const activityName = item.activities.name;
+          
+          if (!branchActivityMap[branchName]) {
+            branchActivityMap[branchName] = [];
+          }
+          branchActivityMap[branchName].push(activityName);
+        });
+        setBranchActivities(branchActivityMap);
       }
       
       // Check if today is marked as absence day
@@ -231,12 +260,19 @@ export default function Track() {
       await persistFinished(finished);
 
       setBranch(nextBranch);
+      
+      // Clear activity if it's not available for the new branch
+      const newBranchActivities = branchActivities[nextBranch] || activityOptions;
+      if (!newBranchActivities.includes(activity)) {
+        setActivity('');
+      }
+      
       const newSession: SessionRecord = {
         id: crypto.randomUUID(),
         start: now,
         pausedSeconds: 0,
         branch: nextBranch,
-        activity: activity,
+        activity: newBranchActivities.includes(activity) ? activity : '',
         status: session.status,
       };
       setSession(newSession);
@@ -246,6 +282,12 @@ export default function Track() {
       toast({ title: 'Filiale gewechselt', description: 'Abschnitt gespeichert, neuer gestartet.' });
     } else {
       setBranch(nextBranch);
+      
+      // Clear activity if it's not available for the new branch
+      const newBranchActivities = branchActivities[nextBranch] || activityOptions;
+      if (!newBranchActivities.includes(activity)) {
+        setActivity('');
+      }
     }
   };
 
@@ -321,7 +363,7 @@ export default function Track() {
           </header>
           <OnboardingWizard
             branches={branchOptions as unknown as readonly string[]}
-            activities={activityOptions as unknown as readonly string[]}
+            activities={currentActivities as unknown as readonly string[]}
             branch={branch}
             activity={activity}
             onChangeBranch={setBranch}
@@ -408,7 +450,7 @@ export default function Track() {
               <div className="grid gap-4">
                 <h3 className="text-xl font-medium">Was machst du?</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {activityOptions.map((a) => (
+                  {currentActivities.map((a) => (
                     <Button
                       key={a}
                       type="button"

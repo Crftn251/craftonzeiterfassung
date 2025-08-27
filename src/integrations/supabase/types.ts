@@ -62,6 +62,42 @@ export type Database = {
         }
         Relationships: []
       }
+      branch_activities: {
+        Row: {
+          activity_id: string
+          branch_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          activity_id: string
+          branch_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          activity_id?: string
+          branch_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_activities_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branch_activities_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           created_at: string

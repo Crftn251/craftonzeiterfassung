@@ -44,7 +44,13 @@ export default function FormattedTimeEntries() {
         return;
       }
 
-      setEntries(data || []);
+      // Map the data and ensure status is properly typed
+      const mappedData = (data || []).map((entry: any) => ({
+        ...entry,
+        status: entry.status as 'running' | 'ended'
+      }));
+
+      setEntries(mappedData);
     } catch (error) {
       console.error('Error:', error);
       toast({

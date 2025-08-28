@@ -208,7 +208,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_time_entries_formatted: {
+        Row: {
+          activity_id: string | null
+          activity_name: string | null
+          branch_id: string | null
+          branch_name: string | null
+          created_at: string | null
+          date_local: string | null
+          end_local: string | null
+          ended_at: string | null
+          ended_utc: string | null
+          id: string | null
+          net_hhmm: string | null
+          net_seconds: number | null
+          notes: string | null
+          paused_seconds: number | null
+          start_local: string | null
+          started_at: string | null
+          started_utc: string | null
+          status: string | null
+          updated_at: string | null
+          user_display_name: string | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       is_admin: {

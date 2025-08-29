@@ -142,24 +142,106 @@ export default function HistoryPage() {
     return s;
   }
 
+  const secondsToHHMM = (seconds: number): string => {
+    const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
   const exportCsv = () => {
     if (data.length === 0) {
       toast({ title: 'Keine Daten', description: 'Es gibt keine Daten zum Exportieren.', variant: 'destructive' });
       return;
     }
     
-    const header = ["Datum","Typ","Filiale","Tätigkeit","Start","Ende","Pause(min)","Netto(HH:MM)"];
-    const rows = data.map((s: any) => [
-      new Date(s.start || s.date).toLocaleDateString(),
-      s.type === 'absence' ? `Abwesenheit (${s.branch})` : 'Zeit',
-      s.branch ?? "",
-      s.activity ?? "",
-      s.type === 'absence' ? '—' : fmt(s.start),
-      s.type === 'absence' ? '—' : (s.end ? fmt(s.end) : '—'),
-      s.type === 'absence' ? '—' : Math.floor((s.pausedSeconds || 0) / 60),
-      s.type === 'absence' ? '—' : dur(s)
-    ]);
-    const csv = [header, ...rows].map(r => r.map(toCsvValue).join(";")).join("\n");
+    // Group data by date (only time_entry items for summaries)
+    const groupedByDate = data.reduce((acc, item) => {
+      const date = new Date(item.start || item.date).toLocaleDateString('de-DE');
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(item);
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    const now = Date.now();
+    const header = ["Datum","Typ","Filiale","Tätigkeit","Start","Ende","Pause(min)","Brutto(HH:MM)","Netto(HH:MM)"];
+    const allRows: any[][] = [];
+    
+    let totalPauseSeconds = 0;
+    let totalBruttoSeconds = 0;
+    let totalNettoSeconds = 0;
+
+    // Sort dates
+    const sortedDates = Object.keys(groupedByDate).sort((a, b) => 
+      new Date(b.split('.').reverse().join('-')).getTime() - new Date(a.split('.').reverse().join('-')).getTime()
+    );
+
+    for (const date of sortedDates) {
+      const dayItems = groupedByDate[date];
+      let dayPauseSeconds = 0;
+      let dayBruttoSeconds = 0;
+      let dayNettoSeconds = 0;
+
+      // Add individual entries for this day
+      for (const s of dayItems) {
+        let bruttoHHMM = '—';
+        let nettoHHMM = '—';
+        
+        if (s.type === 'time_entry') {
+          const endTime = s.end || now;
+          const bruttoSeconds = Math.floor((endTime - s.start) / 1000);
+          const nettoSeconds = Math.max(0, bruttoSeconds - (s.pausedSeconds || 0));
+          
+          bruttoHHMM = secondsToHHMM(bruttoSeconds);
+          nettoHHMM = secondsToHHMM(nettoSeconds);
+          
+          dayPauseSeconds += s.pausedSeconds || 0;
+          dayBruttoSeconds += bruttoSeconds;
+          dayNettoSeconds += nettoSeconds;
+        }
+
+        allRows.push([
+          new Date(s.start || s.date).toLocaleDateString('de-DE'),
+          s.type === 'absence' ? `Abwesenheit (${s.branch})` : 'Zeit',
+          s.branch ?? "",
+          s.activity ?? "",
+          s.type === 'absence' ? '—' : fmt(s.start),
+          s.type === 'absence' ? '—' : (s.end ? fmt(s.end) : '—'),
+          s.type === 'absence' ? '—' : Math.floor((s.pausedSeconds || 0) / 60),
+          bruttoHHMM,
+          nettoHHMM
+        ]);
+      }
+
+      // Add daily summary (only if there were time entries)
+      const timeEntriesInDay = dayItems.filter(item => item.type === 'time_entry');
+      if (timeEntriesInDay.length > 0) {
+        allRows.push([
+          `--- Summe ${date} ---`,
+          '', '', '', '', '',
+          Math.floor(dayPauseSeconds / 60),
+          secondsToHHMM(dayBruttoSeconds),
+          secondsToHHMM(dayNettoSeconds)
+        ]);
+      }
+
+      totalPauseSeconds += dayPauseSeconds;
+      totalBruttoSeconds += dayBruttoSeconds;
+      totalNettoSeconds += dayNettoSeconds;
+    }
+
+    // Add grand total (only time entries)
+    const hasTimeEntries = data.some(item => item.type === 'time_entry');
+    if (hasTimeEntries) {
+      allRows.push([
+        '=== GESAMT-SUMME ===',
+        '', '', '', '', '',
+        Math.floor(totalPauseSeconds / 60),
+        secondsToHHMM(totalBruttoSeconds),
+        secondsToHHMM(totalNettoSeconds)
+      ]);
+    }
+    
+    const csv = [header, ...allRows].map(r => r.map(toCsvValue).join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

@@ -129,6 +129,7 @@ export type Database = {
           shopify_employee_email: string | null
           shopify_employee_id: string | null
           updated_at: string
+          weekly_goal_hours: number
         }
         Insert: {
           created_at?: string
@@ -139,6 +140,7 @@ export type Database = {
           shopify_employee_email?: string | null
           shopify_employee_id?: string | null
           updated_at?: string
+          weekly_goal_hours?: number
         }
         Update: {
           created_at?: string
@@ -149,6 +151,7 @@ export type Database = {
           shopify_employee_email?: string | null
           shopify_employee_id?: string | null
           updated_at?: string
+          weekly_goal_hours?: number
         }
         Relationships: []
       }

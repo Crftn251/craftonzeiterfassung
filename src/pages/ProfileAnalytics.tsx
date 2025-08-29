@@ -33,6 +33,7 @@ export default function ProfileAnalytics() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [activities, setActivities] = useState<{ id: string; name: string }[]>([]);
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [weeklyGoalHours, setWeeklyGoalHours] = useState<number>(40);
   
   // Absence tracking state
   const [absenceDates, setAbsenceDates] = useState<{ [key: string]: 'sickness' | 'vacation' }>({});
@@ -47,14 +48,20 @@ export default function ProfileAnalytics() {
       if (!mounted) return;
       setUserId(uid);
       if (uid) {
-        const [{ data: b }, { data: a }, { data: absences }] = await Promise.all([
+        const [{ data: b }, { data: a }, { data: absences }, { data: profile }] = await Promise.all([
           supabase.from('branches').select('id,name').order('name'),
           supabase.from('activities').select('id,name').order('name'),
           supabase.from('absence_days').select('date,type').eq('user_id', uid),
+          supabase.from('profiles').select('weekly_goal_hours').eq('id', uid).single(),
         ]);
         if (!mounted) return;
         setBranches(b || []);
         setActivities(a || []);
+        
+        // Set weekly goal from profile
+        if (profile?.weekly_goal_hours) {
+          setWeeklyGoalHours(profile.weekly_goal_hours);
+        }
         
         // Load existing absence days
         const absenceMap: { [key: string]: 'sickness' | 'vacation' } = {};
@@ -91,7 +98,7 @@ export default function ProfileAnalytics() {
   }, []);
 
   const totalSeconds = timeEntries.reduce((acc, s) => acc + Math.max(0, Math.floor(((s.end ?? Date.now()) - s.start) / 1000) - (s.pausedSeconds || 0)), 0);
-  const goal = 40 * 3600; // 40h Wochenziel default
+  const goal = weeklyGoalHours * 3600; // Dynamic goal from profile
   const progress = Math.min(100, Math.round((totalSeconds / goal) * 100));
 
   // Nachtragen Formular
@@ -252,7 +259,7 @@ export default function ProfileAnalytics() {
           <CardHeader><CardTitle>Woche – Fortschritt</CardTitle></CardHeader>
           <CardContent>
             <div className="text-3xl font-semibold tabular-nums">{Math.floor(totalSeconds / 3600)}h</div>
-            <div className="text-sm text-muted-foreground mb-2">Ziel 40h</div>
+            <div className="text-sm text-muted-foreground mb-2">Ziel {weeklyGoalHours}h</div>
             <Progress value={progress} />
           </CardContent>
         </Card>

@@ -26,7 +26,7 @@ export default function ProfileAnalytics() {
   useEffect(() => {
     document.title = 'Profil & Auswertungen – Crafton Time';
     const meta = document.querySelector('meta[name="description"]');
-    if (meta) meta.setAttribute('content', 'Heute, Woche, Monat – Summen, Ziele und Fortschritt.');
+    if (meta) meta.setAttribute('content', 'Heute & Woche – Summen, Ziele und Fortschritt.');
   }, []);
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -254,21 +254,13 @@ export default function ProfileAnalytics() {
   return (
     <>
       <h1 className="sr-only">Profil & Auswertungen – Crafton Time</h1>
-      <section className="grid gap-6 md:grid-cols-3">
+      <section className="grid gap-6 md:grid-cols-2">
         <Card className="col-span-1">
           <CardHeader><CardTitle>Woche – Fortschritt</CardTitle></CardHeader>
           <CardContent>
             <div className="text-3xl font-semibold tabular-nums">{Math.floor(totalSeconds / 3600)}h</div>
             <div className="text-sm text-muted-foreground mb-2">Ziel {weeklyGoalHours}h</div>
             <Progress value={progress} />
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-1">
-          <CardHeader><CardTitle>Monat – Sessions</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{timeEntries.length}</div>
-            <div className="text-sm text-muted-foreground">Gespeicherte Einträge</div>
           </CardContent>
         </Card>
 

@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Play, Pause, Square, Plus, Calendar, MapPin, Briefcase } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { useTimer } from "react-timer-hook";
+import { useStopwatch } from "react-timer-hook";
 import AssignmentManager from "./track/AssignmentManager";
 
 interface Branch {
@@ -42,7 +42,7 @@ export default function Track() {
   const [notes, setNotes] = useState<string>("");
   const [isTracking, setIsTracking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [pausedTime, setPausedTime] = useState(0);
+  const [pauseStartedAt, setPauseStartedAt] = useState<Date | null>(null);
   const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
   const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
   const [allActivities, setAllActivities] = useState<string[]>([]);
@@ -58,9 +58,6 @@ export default function Track() {
   const [backfillNotes, setBackfillNotes] = useState<string>('');
   const [isSubmittingBackfill, setIsSubmittingBackfill] = useState(false);
 
-  const expiryTimestamp = new Date();
-  expiryTimestamp.setSeconds(expiryTimestamp.getSeconds() + 1);
-
   const {
     totalSeconds,
     seconds,
@@ -68,13 +65,8 @@ export default function Track() {
     hours,
     start,
     pause,
-    resume,
-    restart,
-  } = useTimer({ 
-    expiryTimestamp, 
-    onExpire: () => console.warn('Timer expired'),
-    autoStart: false 
-  });
+    reset,
+  } = useStopwatch({ autoStart: false });
 
   useEffect(() => {
     document.title = 'Zeiterfassung – Crafton Time';
@@ -138,15 +130,8 @@ export default function Track() {
         const now = new Date();
         const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000) - activeEntry.paused_seconds;
         
-        const newExpiryTime = new Date();
-        newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
-        restart(newExpiryTime, false);
-        
-        for (let i = 0; i < elapsedSeconds; i++) {
-          setTimeout(() => {
-            restart(new Date(Date.now() + 1000), false);
-          }, 10);
-        }
+        // Set the stopwatch to the elapsed time and start it
+        reset(new Date(Date.now() - elapsedSeconds * 1000), true);
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -253,11 +238,9 @@ export default function Track() {
 
       setCurrentEntry(entry);
       setIsTracking(true);
-      setPausedTime(0);
+      setPauseStartedAt(null);
       
-      const newExpiryTime = new Date();
-      newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
-      restart(newExpiryTime, true);
+      start();
 
       toast({
         title: "Timer gestartet",
@@ -278,16 +261,7 @@ export default function Track() {
     try {
       pause();
       setIsPaused(true);
-      
-      const newPausedTime = pausedTime + 1;
-      setPausedTime(newPausedTime);
-
-      const { error } = await supabase
-        .from('time_entries')
-        .update({ paused_seconds: newPausedTime })
-        .eq('id', currentEntry.id);
-
-      if (error) throw error;
+      setPauseStartedAt(new Date());
 
       toast({
         title: "Timer pausiert",
@@ -303,13 +277,23 @@ export default function Track() {
   };
 
   const resumeTimer = async () => {
-    if (!currentEntry) return;
+    if (!currentEntry || !pauseStartedAt) return;
 
     try {
-      const newExpiryTime = new Date();
-      newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
-      restart(newExpiryTime, true);
+      const pauseDuration = Math.floor((new Date().getTime() - pauseStartedAt.getTime()) / 1000);
+      const newPausedSeconds = currentEntry.paused_seconds + pauseDuration;
+
+      const { error } = await supabase
+        .from('time_entries')
+        .update({ paused_seconds: newPausedSeconds })
+        .eq('id', currentEntry.id);
+
+      if (error) throw error;
+
+      setCurrentEntry({ ...currentEntry, paused_seconds: newPausedSeconds });
+      start();
       setIsPaused(false);
+      setPauseStartedAt(null);
 
       toast({
         title: "Timer fortgesetzt",
@@ -329,11 +313,19 @@ export default function Track() {
 
     try {
       const endTime = new Date().toISOString();
+      let finalPausedSeconds = currentEntry.paused_seconds;
+
+      // If currently paused, add the current pause duration
+      if (isPaused && pauseStartedAt) {
+        const currentPauseDuration = Math.floor((new Date().getTime() - pauseStartedAt.getTime()) / 1000);
+        finalPausedSeconds += currentPauseDuration;
+      }
       
       const { error } = await supabase
         .from('time_entries')
         .update({ 
           ended_at: endTime,
+          paused_seconds: finalPausedSeconds,
           notes: notes || null
         })
         .eq('id', currentEntry.id);
@@ -341,15 +333,12 @@ export default function Track() {
       if (error) throw error;
 
       pause();
+      reset();
       setIsTracking(false);
       setIsPaused(false);
       setCurrentEntry(null);
-      setPausedTime(0);
+      setPauseStartedAt(null);
       setNotes('');
-
-      const newExpiryTime = new Date();
-      newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
-      restart(newExpiryTime, false);
 
       toast({
         title: "Timer gestoppt",

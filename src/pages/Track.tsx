@@ -185,22 +185,15 @@ export default function Track() {
     }
   };
 
-  // Filter activities based on branch and user assignments
+  // Filter activities to show ONLY user-assigned activities
   const getFilteredActivities = (branchName?: string) => {
-    let availableActivities: Activity[] = [];
+    // Start with user's assigned activities only - nothing else
+    let availableActivities = activities.filter(a => userActivities.includes(a.id));
     
+    // Further filter by branch activities if branch is selected
     if (branchName && branchActivities[branchName]) {
-      // If branch has specific activities assigned, use those
       const branchActivityNames = branchActivities[branchName];
-      availableActivities = activities.filter(a => branchActivityNames.includes(a.name));
-    } else {
-      // Otherwise use all activities
-      availableActivities = activities;
-    }
-
-    // Further filter by user's allowed activities if any are assigned
-    if (userActivities.length > 0) {
-      availableActivities = availableActivities.filter(a => userActivities.includes(a.id));
+      availableActivities = availableActivities.filter(a => branchActivityNames.includes(a.name));
     }
 
     return availableActivities;

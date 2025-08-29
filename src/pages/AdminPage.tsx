@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,9 +22,16 @@ interface Activity {
   name: string;
 }
 
+interface Branch {
+  id: string;
+  name: string;
+}
+
 export default function AdminPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [weeklyGoal, setWeeklyGoal] = useState<string>('40');
   const [saving, setSaving] = useState(false);
@@ -69,6 +77,38 @@ export default function AdminPage() {
           .order('name');
         
         setActivities(allActivities || []);
+
+        // Load all branches
+        const { data: allBranches } = await supabase
+          .from('branches')
+          .select('id, name')
+          .order('name');
+        
+        setBranches(allBranches || []);
+
+        // Load branch-activity assignments
+        const { data: branchActivityData } = await supabase
+          .from('branch_activities')
+          .select(`
+            branch_id,
+            activity_id,
+            branches!inner(name),
+            activities!inner(name)
+          `);
+
+        // Group activities by branch name
+        const branchActivityMap: Record<string, string[]> = {};
+        branchActivityData?.forEach((ba: any) => {
+          const branchName = ba.branches.name;
+          const activityName = ba.activities.name;
+          
+          if (!branchActivityMap[branchName]) {
+            branchActivityMap[branchName] = [];
+          }
+          branchActivityMap[branchName].push(activityName);
+        });
+        
+        setBranchActivities(branchActivityMap);
       }
     };
     
@@ -296,6 +336,32 @@ export default function AdminPage() {
           </CardContent>
         </Card>
         
+        <Card>
+          <CardHeader>
+            <CardTitle>Übersicht: Tätigkeiten je Filiale</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              {branches.map((branch) => (
+                <div key={branch.id} className="border rounded-lg p-4">
+                  <h3 className="font-semibold mb-3">{branch.name}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {branchActivities[branch.name]?.length > 0 ? (
+                      branchActivities[branch.name].map((activityName) => (
+                        <Badge key={activityName} variant="secondary">
+                          {activityName}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Keine Zuordnungen</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Benutzerübersicht</CardTitle>

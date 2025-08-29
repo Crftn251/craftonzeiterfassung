@@ -1,8 +1,10 @@
+
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,12 +16,23 @@ interface Profile {
   role: string;
 }
 
+interface Activity {
+  id: string;
+  name: string;
+}
+
 export default function AdminPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [weeklyGoal, setWeeklyGoal] = useState<string>('40');
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Activity management state
+  const [selectedUserIdForActivities, setSelectedUserIdForActivities] = useState<string>('');
+  const [userActivities, setUserActivities] = useState<string[]>([]);
+  const [savingActivities, setSavingActivities] = useState(false);
 
   useEffect(() => {
     document.title = 'Admin – Crafton Time';
@@ -48,6 +61,14 @@ export default function AdminPage() {
           .order('email');
         
         setProfiles(allProfiles || []);
+
+        // Load all activities
+        const { data: allActivities } = await supabase
+          .from('activities')
+          .select('id, name')
+          .order('name');
+        
+        setActivities(allActivities || []);
       }
     };
     
@@ -59,6 +80,27 @@ export default function AdminPage() {
     const user = profiles.find(p => p.id === userId);
     if (user) {
       setWeeklyGoal(user.weekly_goal_hours.toString());
+    }
+  };
+
+  const handleUserSelectForActivities = async (userId: string) => {
+    setSelectedUserIdForActivities(userId);
+    
+    // Load current activities for this user
+    const { data: profileActivities } = await supabase
+      .from('profile_activities')
+      .select('activity_id')
+      .eq('profile_id', userId);
+    
+    const currentActivityIds = profileActivities?.map(pa => pa.activity_id) || [];
+    setUserActivities(currentActivityIds);
+  };
+
+  const handleActivityToggle = (activityId: string, checked: boolean) => {
+    if (checked) {
+      setUserActivities(prev => [...prev, activityId]);
+    } else {
+      setUserActivities(prev => prev.filter(id => id !== activityId));
     }
   };
 
@@ -97,6 +139,46 @@ export default function AdminPage() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveUserActivities = async () => {
+    if (!selectedUserIdForActivities) {
+      toast({ title: 'Kein Benutzer gewählt', description: 'Bitte wählen Sie einen Benutzer aus.' });
+      return;
+    }
+
+    setSavingActivities(true);
+    try {
+      // First, delete existing assignments for this user
+      await supabase
+        .from('profile_activities')
+        .delete()
+        .eq('profile_id', selectedUserIdForActivities);
+
+      // Then insert new assignments
+      if (userActivities.length > 0) {
+        const assignments = userActivities.map(activityId => ({
+          profile_id: selectedUserIdForActivities,
+          activity_id: activityId
+        }));
+
+        const { error } = await supabase
+          .from('profile_activities')
+          .insert(assignments);
+
+        if (error) throw error;
+      }
+
+      toast({ title: 'Gespeichert', description: 'Benutzer-Tätigkeiten wurden aktualisiert.' });
+    } catch (error: any) {
+      toast({ 
+        title: 'Fehler beim Speichern', 
+        description: error.message || 'Unbekannter Fehler',
+        variant: 'destructive' 
+      });
+    } finally {
+      setSavingActivities(false);
     }
   };
 
@@ -156,6 +238,61 @@ export default function AdminPage() {
             <Button onClick={saveWeeklyGoal} disabled={saving || !selectedUserId}>
               {saving ? 'Speichern...' : 'Ziel speichern'}
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Tätigkeiten pro Benutzer verwalten</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-muted-foreground">Benutzer auswählen</label>
+              <Select value={selectedUserIdForActivities} onValueChange={handleUserSelectForActivities}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Benutzer wählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.display_name || profile.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedUserIdForActivities && (
+              <>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm text-muted-foreground">Erlaubte Tätigkeiten</label>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Wählen Sie die Tätigkeiten aus, die dieser Benutzer verwenden darf. Ohne Auswahl sind alle Tätigkeiten erlaubt.
+                  </p>
+                  <div className="space-y-3 max-h-60 overflow-y-auto border rounded p-3">
+                    {activities.map((activity) => (
+                      <div key={activity.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={activity.id}
+                          checked={userActivities.includes(activity.id)}
+                          onCheckedChange={(checked) => handleActivityToggle(activity.id, !!checked)}
+                        />
+                        <label 
+                          htmlFor={activity.id} 
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {activity.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Button onClick={saveUserActivities} disabled={savingActivities}>
+                  {savingActivities ? 'Speichern...' : 'Tätigkeiten speichern'}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
         

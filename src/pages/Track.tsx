@@ -1,719 +1,712 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
-import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff, Calendar as CalendarIcon } from "lucide-react";
-import OnboardingWizard from "./track/OnboardingWizard";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Play, Pause, Square, Plus, Calendar, MapPin, Briefcase } from "lucide-react";
 import { format } from "date-fns";
+import { de } from "date-fns/locale";
+import { useTimer } from "react-timer-hook";
+import AssignmentManager from "./track/AssignmentManager";
 
-const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
-const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
-
-const BACKFILL_ACTIVITY_NAMES = [
-  "Ordnung",
-  "Verkauf", 
-  "Social Media",
-  "OLS",
-  "Ordern",
-  "Meeting",
-] as const;
-
-function formatTime(totalSeconds: number) {
-  const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-  const m = Math.floor(totalSeconds % 3600 / 60).toString().padStart(2, '0');
-  const s = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
-  return `${h}:${m}:${s}`;
+interface Branch {
+  id: string;
+  name: string;
 }
 
-type SessionRecord = {
+interface Activity {
   id: string;
-  start: number; // epoch ms
-  end?: number;
-  pausedSeconds: number;
-  branch: string;
-  activity: string;
-  status: 'running' | 'paused' | 'stopped';
-};
+  name: string;
+}
+
+interface TimeEntry {
+  id: string;
+  started_at: string;
+  ended_at?: string;
+  paused_seconds: number;
+  branch_id?: string;
+  activity_id?: string;
+  notes?: string;
+}
 
 export default function Track() {
-  const [branch, setBranch] = useState<string>(() => localStorage.getItem('ct_branch') || "");
-  const [activity, setActivity] = useState<string>(() => localStorage.getItem('ct_activity') || "");
-  const [session, setSession] = useState<SessionRecord | null>(() => {
-    const raw = localStorage.getItem('ct_session');
-    return raw ? JSON.parse(raw) as SessionRecord : null;
-  });
-  const [offline, setOffline] = useState<boolean>(() => !navigator.onLine);
-  
-  // optimized: lightweight tick state (no session rewrite)
-  const [tick, setTick] = useState(0);
-  const tickRef = useRef<number | null>(null);
-  
-  const [user, setUser] = useState<any>(null);
-  const [branchOptions, setBranchOptions] = useState<string[]>([...BRANCHES] as unknown as string[]);
-  const [activityOptions, setActivityOptions] = useState<string[]>([...ACTIVITIES] as unknown as string[]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [selectedActivity, setSelectedActivity] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
+  const [isTracking, setIsTracking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedTime, setPausedTime] = useState(0);
+  const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
   const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
-  const branchIdByName = useRef<Record<string, string>>({});
-  const activityIdByName = useRef<Record<string, string>>({});
-  const [todayAbsence, setTodayAbsence] = useState<string | null>(null);
-  
+  const [allActivities, setAllActivities] = useState<string[]>([]);
+  const [userActivities, setUserActivities] = useState<string[]>([]);
+
   // Backfill state
-  const [backfillDate, setBackfillDate] = useState<Date | undefined>(new Date());
-  const [backfillStartTime, setBackfillStartTime] = useState<string>('09:00');
-  const [backfillEndTime, setBackfillEndTime] = useState<string>('17:00');
-  const [backfillPauseMin, setBackfillPauseMin] = useState<string>('0');
-  const [backfillBranchId, setBackfillBranchId] = useState<string>('');
-  const [backfillActivityId, setBackfillActivityId] = useState<string>('');
-  const [backfillReason, setBackfillReason] = useState<string>('');
-  const [backfillSaving, setBackfillSaving] = useState(false);
+  const [showBackfill, setShowBackfill] = useState(false);
+  const [backfillDate, setBackfillDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [backfillStartTime, setBackfillStartTime] = useState('09:00');
+  const [backfillEndTime, setBackfillEndTime] = useState('17:00');
+  const [backfillBranch, setBackfillBranch] = useState<string>('');
+  const [backfillActivity, setBackfillActivity] = useState<string>('');
+  const [backfillNotes, setBackfillNotes] = useState<string>('');
+  const [isSubmittingBackfill, setIsSubmittingBackfill] = useState(false);
 
-  const elapsed = useMemo(() => {
-    if (!session) return 0;
-    const now = Date.now();
-    const end = session.end ?? now;
-    const total = Math.max(0, Math.floor((end - session.start) / 1000) - session.pausedSeconds);
-    return total;
-  }, [session, tick]);
+  const expiryTimestamp = new Date();
+  expiryTimestamp.setSeconds(expiryTimestamp.getSeconds() + 1);
 
-  // Filter activities based on selected branch
-  const filteredActivities = useMemo(() => {
-    if (!branch) return activityOptions;
-    return branchActivities[branch] || activityOptions;
-  }, [branch, branchActivities, activityOptions]);
+  const {
+    totalSeconds,
+    seconds,
+    minutes,
+    hours,
+    start,
+    pause,
+    resume,
+    restart,
+  } = useTimer({ 
+    expiryTimestamp, 
+    onExpire: () => console.warn('Timer expired'),
+    autoStart: false 
+  });
 
   useEffect(() => {
-    const onOnline = () => setOffline(false);
-    const onOffline = () => setOffline(true);
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
-    return () => {
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-    };
+    document.title = 'Zeiterfassung – Crafton Time';
+    const meta = document.querySelector('meta[name="description"]');
+    if (meta) meta.setAttribute('content', 'Erfassen Sie Ihre Arbeitszeiten mit Start/Stopp-Timer oder tragen Sie Zeiten nachträglich ein.');
+    
+    loadInitialData();
   }, []);
 
-  useEffect(() => {
-    if (session && session.status === 'running') {
-      tickRef.current = window.setInterval(() => {
-        setTick(t => t + 1);
-      }, 1000);
-    }
-    return () => {
-      if (tickRef.current) window.clearInterval(tickRef.current);
-    };
-  }, [session?.status]);
+  const loadInitialData = async () => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user?.id) return;
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
-      }
-    );
+      // Load branches
+      const { data: branchData } = await supabase
+        .from('branches')
+        .select('id, name')
+        .order('name');
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
+      setBranches(branchData || []);
 
-    return () => subscription.unsubscribe();
-  }, []);
+      // Load all activities
+      const { data: activityData } = await supabase
+        .from('activities')
+        .select('id, name')
+        .order('name');
 
-  useEffect(() => {
-    (async () => {
-      const { data: b } = await supabase.from('branches').select('id,name').order('name');
-      if (b) {
-        setBranchOptions(b.map(x => x.name));
-        branchIdByName.current = Object.fromEntries(b.map(x => [x.name, x.id]));
-      }
+      setActivities(activityData || []);
 
-      const { data: a } = await supabase.from('activities').select('id,name').order('name');
-      if (a) {
-        setActivityOptions(a.map(x => x.name));
-        activityIdByName.current = Object.fromEntries(a.map(x => [x.name, x.id]));
-      }
+      // Load user's allowed activities
+      const { data: userActivityData } = await supabase
+        .from('profile_activities')
+        .select('activity_id')
+        .eq('profile_id', user.user.id);
+
+      const userActivityIds = userActivityData?.map(pa => pa.activity_id) || [];
+      setUserActivities(userActivityIds);
 
       // Load branch-activity assignments
-      const { data: assignments } = await supabase
+      await loadBranchActivities();
+
+      // Check for active time entry
+      const { data: activeEntry } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .is('ended_at', null)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (activeEntry) {
+        setCurrentEntry(activeEntry);
+        setIsTracking(true);
+        setSelectedBranch(activeEntry.branch_id || '');
+        setSelectedActivity(activeEntry.activity_id || '');
+        setNotes(activeEntry.notes || '');
+        
+        const startTime = new Date(activeEntry.started_at);
+        const now = new Date();
+        const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000) - activeEntry.paused_seconds;
+        
+        const newExpiryTime = new Date();
+        newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
+        restart(newExpiryTime, false);
+        
+        for (let i = 0; i < elapsedSeconds; i++) {
+          setTimeout(() => {
+            restart(new Date(Date.now() + 1000), false);
+          }, 10);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    }
+  };
+
+  const loadBranchActivities = async () => {
+    try {
+      const { data: branchActivityData } = await supabase
         .from('branch_activities')
         .select(`
+          branch_id,
+          activity_id,
           branches!inner(name),
           activities!inner(name)
         `);
 
-      if (assignments) {
-        const branchActivityMap: Record<string, string[]> = {};
-        assignments.forEach((assignment: any) => {
-          const branchName = assignment.branches.name;
-          const activityName = assignment.activities.name;
-          
-          if (!branchActivityMap[branchName]) {
-            branchActivityMap[branchName] = [];
-          }
-          branchActivityMap[branchName].push(activityName);
-        });
-        setBranchActivities(branchActivityMap);
-      }
+      const activityMap: Record<string, string[]> = {};
+      const allActivitiesSet = new Set<string>();
 
-      // Check if today is marked as absence day
-      if (user) {
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const { data: absence } = await supabase
-          .from('absence_days')
-          .select('type')
-          .eq('user_id', user.id)
-          .eq('date', today)
-          .maybeSingle();
-        setTodayAbsence(absence?.type || null);
-      }
-    })();
-  }, [user]);
-
-  useEffect(() => {
-    localStorage.setItem('ct_branch', branch);
-  }, [branch]);
-
-  useEffect(() => {
-    localStorage.setItem('ct_activity', activity);
-  }, [activity]);
-
-  useEffect(() => {
-    if (session) localStorage.setItem('ct_session', JSON.stringify(session));
-    else localStorage.removeItem('ct_session');
-  }, [session]);
-
-  // Reset activity if it's not available for the selected branch
-  useEffect(() => {
-    if (branch && activity && !filteredActivities.includes(activity)) {
-      setActivity("");
-    }
-  }, [branch, activity, filteredActivities]);
-
-  const start = () => {
-    if (!user) {
-      toast({
-        title: 'Nicht angemeldet',
-        description: 'Bitte melden Sie sich an, um die Zeiterfassung zu nutzen.',
-        variant: 'destructive'
+      branchActivityData?.forEach((ba: any) => {
+        const branchName = ba.branches.name;
+        const activityName = ba.activities.name;
+        
+        if (!activityMap[branchName]) {
+          activityMap[branchName] = [];
+        }
+        activityMap[branchName].push(activityName);
+        allActivitiesSet.add(activityName);
       });
-      return;
+
+      setBranchActivities(activityMap);
+      setAllActivities(Array.from(allActivitiesSet));
+    } catch (error) {
+      console.error('Error loading branch activities:', error);
     }
-    if (!branch || !activity) {
-      toast({
-        title: 'Auswahl erforderlich',
-        description: 'Bitte Filiale und Tätigkeit wählen.'
-      });
-      return;
-    }
-    if (todayAbsence) {
-      const absenceText = todayAbsence === 'sickness' ? 'Krankheit (K)' : 'Urlaub (U)';
-      toast({
-        title: 'Zeiterfassung blockiert',
-        description: `Heute ist als ${absenceText} markiert. Zeiterfassung nicht möglich.`,
-        variant: 'destructive'
-      });
-      return;
-    }
-    const s: SessionRecord = {
-      id: crypto.randomUUID(),
-      start: Date.now(),
-      pausedSeconds: 0,
-      branch,
-      activity,
-      status: 'running'
-    };
-    setSession(s);
   };
 
-  const pause = () => {
-    if (!session) return;
-    if (session.status === 'paused') {
-      // resume
-      const now = Date.now();
-      const pausedMarker = Number(localStorage.getItem('ct_paused_since')) || now;
-      const add = Math.floor((now - pausedMarker) / 1000);
-      localStorage.removeItem('ct_paused_since');
-      setSession({
-        ...session,
-        pausedSeconds: session.pausedSeconds + add,
-        status: 'running'
-      });
+  // Filter activities based on branch and user assignments
+  const getFilteredActivities = (branchName?: string) => {
+    let availableActivities: Activity[] = [];
+    
+    if (branchName && branchActivities[branchName]) {
+      // If branch has specific activities assigned, use those
+      const branchActivityNames = branchActivities[branchName];
+      availableActivities = activities.filter(a => branchActivityNames.includes(a.name));
     } else {
-      // pause
-      localStorage.setItem('ct_paused_since', String(Date.now()));
-      setSession({
-        ...session,
-        status: 'paused'
-      });
+      // Otherwise use all activities
+      availableActivities = activities;
     }
+
+    // Further filter by user's allowed activities if any are assigned
+    if (userActivities.length > 0) {
+      availableActivities = availableActivities.filter(a => userActivities.includes(a.id));
+    }
+
+    return availableActivities;
   };
 
-  const persistFinished = async (finished: SessionRecord) => {
-    if (!user) {
+  // Get activities for current selection
+  const currentAvailableActivities = getFilteredActivities(
+    selectedBranch ? branches.find(b => b.id === selectedBranch)?.name : undefined
+  );
+
+  // Reset activity selection if current activity is no longer available
+  useEffect(() => {
+    if (selectedActivity && !currentAvailableActivities.some(a => a.id === selectedActivity)) {
+      setSelectedActivity('');
+    }
+  }, [selectedActivity, currentAvailableActivities]);
+
+  // Get activities for backfill selection
+  const backfillAvailableActivities = getFilteredActivities(
+    backfillBranch ? branches.find(b => b.id === backfillBranch)?.name : undefined
+  );
+
+  // Reset backfill activity selection if current activity is no longer available
+  useEffect(() => {
+    if (backfillActivity && !backfillAvailableActivities.some(a => a.id === backfillActivity)) {
+      setBackfillActivity('');
+    }
+  }, [backfillActivity, backfillAvailableActivities]);
+
+  const startTimer = async () => {
+    if (!selectedBranch || !selectedActivity) {
       toast({
-        title: 'Nicht angemeldet',
-        description: 'Bitte melden Sie sich an, um Zeiten zu speichern.',
-        variant: 'destructive'
+        title: "Unvollständige Auswahl",
+        description: "Bitte wählen Sie eine Filiale und Tätigkeit aus.",
+        variant: "destructive"
       });
       return;
     }
-    const payload: any = {
-      user_id: user.id,
-      started_at: new Date(finished.start).toISOString(),
-      ended_at: finished.end ? new Date(finished.end).toISOString() : null,
-      paused_seconds: finished.pausedSeconds
-    };
-    const bid = branchIdByName.current[finished.branch];
-    const aid = activityIdByName.current[finished.activity];
-    if (bid) payload.branch_id = bid;
-    if (aid) payload.activity_id = aid;
-    const{ error } = await supabase.from('time_entries').insert(payload);
-    if (error) {
+
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user?.id) return;
+
+      const { data: entry, error } = await supabase
+        .from('time_entries')
+        .insert({
+          user_id: user.user.id,
+          branch_id: selectedBranch,
+          activity_id: selectedActivity,
+          started_at: new Date().toISOString(),
+          notes: notes || null
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setCurrentEntry(entry);
+      setIsTracking(true);
+      setPausedTime(0);
+      
+      const newExpiryTime = new Date();
+      newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
+      restart(newExpiryTime, true);
+
       toast({
-        title: 'Speichern fehlgeschlagen',
-        description: error.message,
-        variant: 'destructive'
+        title: "Timer gestartet",
+        description: "Die Zeiterfassung wurde gestartet."
       });
-      return;
-    }
-
-    // Trigger storage event to refresh other components
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'time_entries_updated',
-      newValue: Date.now().toString()
-    }));
-  };
-
-  const stop = async () => {
-    if (!session) return;
-    const now = Date.now();
-    let pausedExtra = 0;
-    if (session.status === 'paused') {
-      const pausedMarker = Number(localStorage.getItem('ct_paused_since')) || now;
-      pausedExtra = Math.max(0, Math.floor((now - pausedMarker) / 1000));
-      localStorage.removeItem('ct_paused_since');
-    }
-    const finished: SessionRecord = {
-      ...session,
-      end: now,
-      status: 'stopped',
-      pausedSeconds: session.pausedSeconds + pausedExtra
-    };
-    await persistFinished(finished);
-    setSession(null);
-    toast({
-      title: 'Session beendet',
-      description: 'Abschnitt gespeichert.'
-    });
-  };
-
-  const handleChangeBranch = async (nextBranch: string) => {
-    if (session && (session.status === 'running' || session.status === 'paused')) {
-      const now = Date.now();
-      let pausedExtra = 0;
-      if (session.status === 'paused') {
-        const pausedMarker = Number(localStorage.getItem('ct_paused_since')) || now;
-        pausedExtra = Math.max(0, Math.floor((now - pausedMarker) / 1000));
-      }
-      const finished: SessionRecord = {
-        ...session,
-        end: now,
-        status: 'stopped',
-        pausedSeconds: session.pausedSeconds + pausedExtra
-      };
-      // Clear any previous pause marker since we finalize this segment now
-      localStorage.removeItem('ct_paused_since');
-      await persistFinished(finished);
-      setBranch(nextBranch);
-      const newSession: SessionRecord = {
-        id: crypto.randomUUID(),
-        start: now,
-        pausedSeconds: 0,
-        branch: nextBranch,
-        activity: activity,
-        status: session.status
-      };
-      setSession(newSession);
-      if (session.status === 'paused') {
-        localStorage.setItem('ct_paused_since', String(now));
-      }
+    } catch (error: any) {
       toast({
-        title: 'Filiale gewechselt',
-        description: 'Abschnitt gespeichert, neuer gestartet.'
+        title: "Fehler",
+        description: error.message || "Timer konnte nicht gestartet werden.",
+        variant: "destructive"
       });
-    } else {
-      setBranch(nextBranch);
     }
   };
 
-  const handleChangeActivity = async (nextActivity: string) => {
-    if (session && (session.status === 'running' || session.status === 'paused')) {
-      const now = Date.now();
-      let pausedExtra = 0;
-      if (session.status === 'paused') {
-        const pausedMarker = Number(localStorage.getItem('ct_paused_since')) || now;
-        pausedExtra = Math.max(0, Math.floor((now - pausedMarker) / 1000));
-      }
-      const finished: SessionRecord = {
-        ...session,
-        end: now,
-        status: 'stopped',
-        pausedSeconds: session.pausedSeconds + pausedExtra
-      };
-      // Clear any previous pause marker since we finalize this segment now
-      localStorage.removeItem('ct_paused_since');
-      await persistFinished(finished);
-      setActivity(nextActivity);
-      const newSession: SessionRecord = {
-        id: crypto.randomUUID(),
-        start: now,
-        pausedSeconds: 0,
-        branch: branch,
-        activity: nextActivity,
-        status: session.status
-      };
-      setSession(newSession);
-      if (session.status === 'paused') {
-        localStorage.setItem('ct_paused_since', String(now));
-      }
+  const pauseTimer = async () => {
+    if (!currentEntry) return;
+
+    try {
+      pause();
+      setIsPaused(true);
+      
+      const newPausedTime = pausedTime + 1;
+      setPausedTime(newPausedTime);
+
+      const { error } = await supabase
+        .from('time_entries')
+        .update({ paused_seconds: newPausedTime })
+        .eq('id', currentEntry.id);
+
+      if (error) throw error;
+
       toast({
-        title: 'Tätigkeit gewechselt',
-        description: 'Abschnitt gespeichert, neuer gestartet.'
+        title: "Timer pausiert",
+        description: "Die Zeiterfassung wurde pausiert."
       });
-    } else {
-      setActivity(nextActivity);
+    } catch (error: any) {
+      toast({
+        title: "Fehler",
+        description: error.message || "Timer konnte nicht pausiert werden.",
+        variant: "destructive"
+      });
     }
   };
 
-  // Backfill functionality
-  function buildDateTime(d: Date, time: string) {
-    const [hh, mm] = time.split(':').map(Number);
-    const copy = new Date(d);
-    copy.setHours(hh || 0, mm || 0, 0, 0);
-    return copy;
-  }
+  const resumeTimer = async () => {
+    if (!currentEntry) return;
+
+    try {
+      const newExpiryTime = new Date();
+      newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
+      restart(newExpiryTime, true);
+      setIsPaused(false);
+
+      toast({
+        title: "Timer fortgesetzt",
+        description: "Die Zeiterfassung wurde fortgesetzt."
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fehler",
+        description: error.message || "Timer konnte nicht fortgesetzt werden.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopTimer = async () => {
+    if (!currentEntry) return;
+
+    try {
+      const endTime = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from('time_entries')
+        .update({ 
+          ended_at: endTime,
+          notes: notes || null
+        })
+        .eq('id', currentEntry.id);
+
+      if (error) throw error;
+
+      pause();
+      setIsTracking(false);
+      setIsPaused(false);
+      setCurrentEntry(null);
+      setPausedTime(0);
+      setNotes('');
+
+      const newExpiryTime = new Date();
+      newExpiryTime.setSeconds(newExpiryTime.getSeconds() + 1);
+      restart(newExpiryTime, false);
+
+      toast({
+        title: "Timer gestoppt",
+        description: "Die Zeiterfassung wurde beendet und gespeichert."
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fehler",
+        description: error.message || "Timer konnte nicht gestoppt werden.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const validateBackfillTimes = () => {
+    if (!backfillDate || !backfillStartTime || !backfillEndTime || !backfillBranch || !backfillActivity) {
+      toast({
+        title: "Unvollständige Eingabe",
+        description: "Bitte füllen Sie alle Felder aus.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    const start = new Date(`${backfillDate}T${backfillStartTime}`);
+    const end = new Date(`${backfillDate}T${backfillEndTime}`);
+
+    if (end <= start) {
+      toast({
+        title: "Ungültige Zeiten",
+        description: "Die Endzeit muss nach der Startzeit liegen.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    
+    if (start > today) {
+      toast({
+        title: "Ungültiges Datum",
+        description: "Sie können keine Zeiten in der Zukunft eintragen.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    const maxPastDate = new Date();
+    maxPastDate.setDate(maxPastDate.getDate() - 90);
+    
+    if (start < maxPastDate) {
+      toast({
+        title: "Zu weit in der Vergangenheit",
+        description: "Sie können nur Zeiten der letzten 90 Tage nachtragen.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    return true;
+  };
 
   const submitBackfill = async () => {
-    if (!backfillDate || !backfillStartTime || !backfillEndTime) {
-      toast({ title: 'Angaben unvollständig', description: 'Datum, Start und Ende sind erforderlich.' });
-      return;
-    }
-    const startDt = buildDateTime(backfillDate, backfillStartTime);
-    const endDt = buildDateTime(backfillDate, backfillEndTime);
-    if (endDt <= startDt) {
-      toast({ title: 'Ungültiger Zeitraum', description: 'Ende muss nach Start liegen.', variant: 'destructive' });
-      return;
-    }
-    const pausedSeconds = Math.max(0, Math.floor((Number(backfillPauseMin) || 0) * 60));
+    if (!validateBackfillTimes()) return;
 
-    setBackfillSaving(true);
+    setIsSubmittingBackfill(true);
+
     try {
-      if (!user) {
-        toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um Zeiten nachzutragen.', variant: 'destructive' });
-        return;
-      }
-      
-      const payload: any = {
-        user_id: user.id,
-        started_at: startDt.toISOString(),
-        ended_at: endDt.toISOString(),
-        paused_seconds: pausedSeconds,
-        notes: backfillReason || null,
-        branch_id: backfillBranchId || null,
-        activity_id: backfillActivityId || null,
-      };
-      const { error } = await supabase.from('time_entries').insert(payload);
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user?.id) return;
+
+      const startDateTime = new Date(`${backfillDate}T${backfillStartTime}`);
+      const endDateTime = new Date(`${backfillDate}T${backfillEndTime}`);
+
+      const { error } = await supabase
+        .from('time_entries')
+        .insert({
+          user_id: user.user.id,
+          branch_id: backfillBranch,
+          activity_id: backfillActivity,
+          started_at: startDateTime.toISOString(),
+          ended_at: endDateTime.toISOString(),
+          paused_seconds: 0,
+          notes: backfillNotes || null
+        });
+
       if (error) throw error;
-      
-      // Trigger storage event to refresh other components
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'time_entries_updated',
-        newValue: Date.now().toString()
-      }));
-        
-      toast({ title: 'Stunden nachgetragen', description: 'Eintrag in Supabase gespeichert.' });
-      
-      // Reset form
-      setBackfillReason('');
-      setBackfillBranchId('');
-      setBackfillActivityId('');
-      setBackfillPauseMin('0');
-    } catch (e: any) {
-      toast({ title: 'Fehler beim Speichern', description: e.message || String(e), variant: 'destructive' });
+
+      toast({
+        title: "Zeit eingetragen",
+        description: "Die Zeit wurde erfolgreich nachgetragen."
+      });
+
+      setShowBackfill(false);
+      setBackfillDate(format(new Date(), 'yyyy-MM-dd'));
+      setBackfillStartTime('09:00');
+      setBackfillEndTime('17:00');
+      setBackfillBranch('');
+      setBackfillActivity('');
+      setBackfillNotes('');
+    } catch (error: any) {
+      toast({
+        title: "Fehler",
+        description: error.message || "Zeit konnte nicht eingetragen werden.",
+        variant: "destructive"
+      });
     } finally {
-      setBackfillSaving(false);
+      setIsSubmittingBackfill(false);
     }
   };
 
-  useEffect(() => {
-    document.title = 'Tracken – Crafton Time';
-    const meta = document.querySelector('meta[name="description"]');
-    if (meta) meta.setAttribute('content', 'Arbeitszeit start/stop/pause – schnelle Erfassung und sichere Speicherung.');
-  }, []);
-
-  const status: { label: string; variant: "default" | "secondary" | "destructive"; } = !session ? {
-    label: 'Bereit',
-    variant: 'secondary'
-  } : session.status === 'paused' ? {
-    label: 'Pausiert',
-    variant: 'secondary'
-  } : {
-    label: 'Läuft',
-    variant: 'default'
+  const formatTime = (totalSeconds: number): string => {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  const showWizard = (!branch || !activity) && !session;
 
   return (
-    <section className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-[1fr,420px]">
-      {offline && (
-        <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-secondary">
-          <div className="flex items-center gap-2">
-            <WifiOff className="h-4 w-4" /> Offline – Timer läuft serverseitig weiter (geplant).
-          </div>
-        </div>
-      )}
+    <>
+      <h1 className="sr-only">Zeiterfassung – Crafton Time</h1>
       
-      {todayAbsence && (
-        <div className="md:col-span-2 rounded-xl border p-3 text-sm bg-red-50 border-red-200">
-          <div className="flex items-center gap-2 text-red-700">
-            <span className="font-semibold">
-              {todayAbsence === 'sickness' ? 'K' : 'U'}
-            </span>
-            Heute ist als {todayAbsence === 'sickness' ? 'Krankheitstag' : 'Urlaubstag'} markiert. Zeiterfassung blockiert.
-          </div>
-        </div>
-      )}
-
-      {showWizard ? (
-        <article className="md:col-span-2 rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
-          <header className="mb-4">
-            <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker Onboarding</h1>
-          </header>
-          <OnboardingWizard 
-            branches={branchOptions as unknown as readonly string[]} 
-            activities={filteredActivities as unknown as readonly string[]} 
-            branch={branch} 
-            activity={activity} 
-            onChangeBranch={setBranch} 
-            onChangeActivity={setActivity} 
-          />
-        </article>
-      ) : (
-        <>
-          <article className="rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
-            <header className="mb-4 flex items-center justify-between">
-              <h1 className="text-2xl font-semibold tracking-tight">Zeit-Tracker</h1>
-              <Badge variant={status.variant}>{status.label}</Badge>
-            </header>
-
-            {/* Zeit – pur */}
-            <div className="my-10 flex items-center justify-center">
-              <div 
-                className="font-bold font-mono tabular-nums tracking-tight text-[clamp(2.75rem,12vw,6rem)] sm:text-[clamp(3.5rem,10vw,7rem)] md:text-[clamp(4rem,8vw,8rem)]" 
-                role="status" 
-                aria-live="polite"
-              >
-                {formatTime(elapsed)}
+      <section className="grid gap-6">
+        {/* Timer Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Play className="h-5 w-5" />
+              Zeiterfassung
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Timer Display */}
+            <div className="text-center">
+              <div className="text-6xl font-mono font-bold mb-4">
+                {formatTime(totalSeconds)}
+              </div>
+              <div className="flex justify-center gap-2 mb-6">
+                {!isTracking ? (
+                  <Button onClick={startTimer} size="lg" className="min-w-32">
+                    <Play className="h-4 w-4 mr-2" />
+                    Start
+                  </Button>
+                ) : (
+                  <>
+                    {!isPaused ? (
+                      <Button onClick={pauseTimer} size="lg" variant="outline" className="min-w-32">
+                        <Pause className="h-4 w-4 mr-2" />
+                        Pause
+                      </Button>
+                    ) : (
+                      <Button onClick={resumeTimer} size="lg" className="min-w-32">
+                        <Play className="h-4 w-4 mr-2" />
+                        Fortsetzen
+                      </Button>
+                    )}
+                    <Button onClick={stopTimer} size="lg" variant="destructive" className="min-w-32">
+                      <Square className="h-4 w-4 mr-2" />
+                      Stop
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Controls (ohne Hover-Animation) */}
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              {!session && (
-                <Button 
-                  size="lg" 
-                  onClick={start} 
-                  className="w-full sm:w-auto min-w-[140px]" 
-                  disabled={!!todayAbsence}
-                >
-                  <Play className="mr-2 h-4 w-4" /> Start
+            {/* Selection Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="branch-select" className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Filiale
+                </Label>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={isTracking}>
+                  <SelectTrigger id="branch-select">
+                    <SelectValue placeholder="Filiale wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="activity-select" className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4" />
+                  Tätigkeit
+                </Label>
+                <Select value={selectedActivity} onValueChange={setSelectedActivity} disabled={isTracking}>
+                  <SelectTrigger id="activity-select">
+                    <SelectValue placeholder="Tätigkeit wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentAvailableActivities.map((activity) => (
+                      <SelectItem key={activity.id} value={activity.id}>
+                        {activity.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notizen (optional)</Label>
+              <Textarea 
+                id="notes"
+                value={notes} 
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notizen zu dieser Zeiterfassung..."
+                disabled={isTracking && !isPaused}
+              />
+            </div>
+            
+            {selectedBranch && (
+              <div className="pt-4 border-t">
+                <AssignmentManager
+                  currentBranch={branches.find(b => b.id === selectedBranch)?.name || ''}
+                  branchActivities={branchActivities}
+                  allActivities={allActivities}
+                  onRefresh={loadBranchActivities}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Manual Entry Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Zeiten nachtragen
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Dialog open={showBackfill} onOpenChange={setShowBackfill}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Zeit nachtragen
                 </Button>
-              )}
-              {session && (
-                <Button 
-                  size="lg" 
-                  variant="secondary" 
-                  onClick={pause} 
-                  className="w-full sm:w-auto min-w-[140px]"
-                >
-                  {session.status === 'paused' ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" /> Weiter
-                    </>
-                  ) : (
-                    <>
-                      <Pause className="mr-2 h-4 w-4" /> Pause
-                    </>
-                  )}
-                </Button>
-              )}
-              {session && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      size="lg" 
-                      variant="destructive" 
-                      className="w-full sm:w-auto min-w-[140px]"
-                    >
-                      <Square className="mr-2 h-4 w-4" /> Stop
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Session beenden?</AlertDialogTitle>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                      <AlertDialogAction onClick={stop}>Beenden</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-            </div>
-          </article>
-
-          {/* Side card for selections */}
-          <aside className="rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-medium">Kontext</h2>
-            <div className="grid gap-4">
-              <div className="grid gap-4">
-                <h3 className="text-xl font-medium">Wo arbeitest du?</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {(branchOptions.length > 0 ? branchOptions : BRANCHES).map(b => (
-                    <Button 
-                      key={b} 
-                      type="button" 
-                      variant={branch === b ? "default" : "outline"} 
-                      className="h-auto py-4 px-4 justify-center" 
-                      aria-pressed={branch === b} 
-                      onClick={() => handleChangeBranch(b)}
-                    >
-                      {b}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid gap-4">
-                <h3 className="text-xl font-medium">Was machst du?</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {filteredActivities.map(a => (
-                    <Button 
-                      key={a} 
-                      type="button" 
-                      variant={activity === a ? "default" : "outline"} 
-                      className="h-auto py-4 px-4 justify-center" 
-                      aria-pressed={activity === a} 
-                      onClick={() => handleChangeActivity(a)}
-                    >
-                      {a}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-lg border p-3 text-sm bg-secondary/60">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" /> <span>{branch || "Keine Filiale"}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <Briefcase className="h-4 w-4" /> <span>{activity || "Keine Tätigkeit"}</span>
-                </div>
-              </div>
-            </div>
-          </aside>
-          
-          {/* Backfill section */}
-          <section className="md:col-span-2 mt-6">
-            <Card>
-              <CardHeader><CardTitle>Stunden nachtragen</CardTitle></CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid sm:grid-cols-3 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-muted-foreground">Datum</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className={cn("justify-start font-normal", !backfillDate && "text-muted-foreground")}> 
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {backfillDate ? backfillDate.toLocaleDateString() : <span>Datum wählen</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="z-50 w-auto p-0" align="start">
-                        <Calendar 
-                          mode="single" 
-                          selected={backfillDate}
-                          onSelect={setBackfillDate}
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
-                        />
-                      </PopoverContent>
-                    </Popover>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Zeit nachtragen</DialogTitle>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="backfill-date">Datum</Label>
+                    <Input
+                      id="backfill-date"
+                      type="date"
+                      value={backfillDate}
+                      onChange={(e) => setBackfillDate(e.target.value)}
+                      max={format(new Date(), 'yyyy-MM-dd')}
+                    />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-muted-foreground">Start</label>
-                    <Input type="time" value={backfillStartTime} onChange={(e) => setBackfillStartTime(e.target.value)} />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-start">Startzeit</Label>
+                      <Input
+                        id="backfill-start"
+                        type="time"
+                        value={backfillStartTime}
+                        onChange={(e) => setBackfillStartTime(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-end">Endzeit</Label>
+                      <Input
+                        id="backfill-end"
+                        type="time"
+                        value={backfillEndTime}
+                        onChange={(e) => setBackfillEndTime(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-muted-foreground">Ende</label>
-                    <Input type="time" value={backfillEndTime} onChange={(e) => setBackfillEndTime(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid sm:grid-cols-3 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-muted-foreground">Filiale</label>
-                    <Select value={backfillBranchId} onValueChange={setBackfillBranchId}>
-                      <SelectTrigger>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="backfill-branch">Filiale</Label>
+                    <Select value={backfillBranch} onValueChange={setBackfillBranch}>
+                      <SelectTrigger id="backfill-branch">
                         <SelectValue placeholder="Filiale wählen" />
                       </SelectTrigger>
-                      <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
-                        {Object.entries(branchIdByName.current).map(([name, id]) => (
-                          <SelectItem key={id} value={id}>{name}</SelectItem>
+                      <SelectContent>
+                        {branches.map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id}>
+                            {branch.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-muted-foreground">Tätigkeit</label>
-                    <Select value={backfillActivityId} onValueChange={setBackfillActivityId}>
-                      <SelectTrigger>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="backfill-activity">Tätigkeit</Label>
+                    <Select value={backfillActivity} onValueChange={setBackfillActivity}>
+                      <SelectTrigger id="backfill-activity">
                         <SelectValue placeholder="Tätigkeit wählen" />
                       </SelectTrigger>
-                      <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
-                        {Object.entries(activityIdByName.current)
-                          .filter(([name]) => BACKFILL_ACTIVITY_NAMES.includes(name as any))
-                          .map(([name, id]) => (
-                            <SelectItem key={id} value={id}>{name}</SelectItem>
-                          ))}
+                      <SelectContent>
+                        {backfillAvailableActivities.map((activity) => (
+                          <SelectItem key={activity.id} value={activity.id}>
+                            {activity.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-muted-foreground">Pause (Minuten)</label>
-                    <Input type="number" min={0} value={backfillPauseMin} onChange={(e) => setBackfillPauseMin(e.target.value)} />
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="backfill-notes">Notizen (optional)</Label>
+                    <Textarea
+                      id="backfill-notes"
+                      value={backfillNotes}
+                      onChange={(e) => setBackfillNotes(e.target.value)}
+                      placeholder="Notizen zu dieser Zeiterfassung..."
+                    />
+                  </div>
+                  
+                  <div className="flex gap-2 pt-4">
+                    <Button 
+                      onClick={submitBackfill} 
+                      disabled={isSubmittingBackfill}
+                      className="flex-1"
+                    >
+                      {isSubmittingBackfill ? 'Speichern...' : 'Zeit eintragen'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowBackfill(false)}
+                      disabled={isSubmittingBackfill}
+                    >
+                      Abbrechen
+                    </Button>
                   </div>
                 </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-muted-foreground">Grund / Notiz</label>
-                  <Textarea value={backfillReason} onChange={(e) => setBackfillReason(e.target.value)} placeholder="Warum wird nachgetragen?" />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={submitBackfill} disabled={backfillSaving}>
-                    {backfillSaving ? 'Speichern…' : 'Nachtrag speichern'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-        </>
-      )}
-    </section>
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
+      </section>
+    </>
   );
 }

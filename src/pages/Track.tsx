@@ -569,16 +569,6 @@ export default function Track() {
               />
             </div>
             
-            {selectedBranch && (
-              <div className="pt-4 border-t">
-                <AssignmentManager
-                  currentBranch={branches.find(b => b.id === selectedBranch)?.name || ''}
-                  branchActivities={branchActivities}
-                  allActivities={allActivities}
-                  onRefresh={loadBranchActivities}
-                />
-              </div>
-            )}
           </CardContent>
         </Card>
 

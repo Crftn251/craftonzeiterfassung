@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { Calendar as CalendarIcon, Heart, Plane } from "lucide-react";
+import { Heart, Plane } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -101,89 +97,6 @@ export default function ProfileAnalytics() {
   const goal = weeklyGoalHours * 3600; // Dynamic goal from profile
   const progress = Math.min(100, Math.round((totalSeconds / goal) * 100));
 
-  // Nachtragen Formular
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [startTime, setStartTime] = useState<string>('09:00');
-  const [endTime, setEndTime] = useState<string>('17:00');
-  const [pauseMin, setPauseMin] = useState<string>('0');
-  const [branchId, setBranchId] = useState<string>('');
-  const [activityId, setActivityId] = useState<string>('');
-  const [reason, setReason] = useState<string>('');
-  const [saving, setSaving] = useState(false);
-
-  function buildDateTime(d: Date, time: string) {
-    const [hh, mm] = time.split(':').map(Number);
-    const copy = new Date(d);
-    copy.setHours(hh || 0, mm || 0, 0, 0);
-    return copy;
-  }
-
-  const submitBackfill = async () => {
-    if (!date || !startTime || !endTime) {
-      toast({ title: 'Angaben unvollständig', description: 'Datum, Start und Ende sind erforderlich.' });
-      return;
-    }
-    const startDt = buildDateTime(date, startTime);
-    const endDt = buildDateTime(date, endTime);
-    if (endDt <= startDt) {
-      toast({ title: 'Ungültiger Zeitraum', description: 'Ende muss nach Start liegen.', variant: 'destructive' as any });
-      return;
-    }
-    const pausedSeconds = Math.max(0, Math.floor((Number(pauseMin) || 0) * 60));
-
-    setSaving(true);
-    try {
-      if (!userId || !supabase) {
-        toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um Zeiten nachzutragen.', variant: 'destructive' });
-        return;
-      }
-      
-      const payload: any = {
-        user_id: userId,
-        started_at: startDt.toISOString(),
-        ended_at: endDt.toISOString(),
-        paused_seconds: pausedSeconds,
-        notes: reason || null,
-        branch_id: branchId || null,
-        activity_id: activityId || null,
-      };
-      const { error } = await supabase.from('time_entries').insert(payload);
-      if (error) throw error;
-      
-      // Trigger storage event to refresh other components
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'time_entries_updated',
-        newValue: Date.now().toString()
-      }));
-        
-        toast({ title: 'Stunden nachgetragen', description: 'Eintrag in Supabase gespeichert.' });
-        
-        // Load time entries to update analytics
-        if (userId) {
-          const { data: timeData } = await supabase
-            .from('time_entries')
-            .select('id,started_at,ended_at,paused_seconds')
-            .eq('user_id', userId)
-            .order('started_at', { ascending: false });
-          
-          if (timeData) {
-            const mapped = timeData.map((r: any) => ({
-              id: r.id,
-              start: new Date(r.started_at).getTime(),
-              end: r.ended_at ? new Date(r.ended_at).getTime() : undefined,
-              pausedSeconds: r.paused_seconds || 0,
-            }));
-            setTimeEntries(mapped);
-          }
-        }
-      // Reset
-      setReason('');
-    } catch (e: any) {
-      toast({ title: 'Fehler beim Speichern', description: e.message || String(e), variant: 'destructive' as any });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleAbsenceSelection = async (type: 'sickness' | 'vacation') => {
     if (!userId) {
@@ -327,89 +240,6 @@ export default function ProfileAnalytics() {
         </Card>
       </section>
 
-      <section className="mt-6">
-        <Card>
-          <CardHeader><CardTitle>Stunden nachtragen</CardTitle></CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid sm:grid-cols-3 gap-3">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm text-muted-foreground">Datum</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("justify-start font-normal", !date && "text-muted-foreground")}> 
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? date.toLocaleDateString() : <span>Datum wählen</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="z-50 w-auto p-0" align="start">
-                    <Calendar 
-                      mode="single" 
-                      selected={date}
-                      onSelect={setDate as any}
-                      initialFocus
-                      className={cn("p-3 pointer-events-auto")}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm text-muted-foreground">Start</label>
-                <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm text-muted-foreground">Ende</label>
-                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-3 gap-3">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm text-muted-foreground">Filiale</label>
-                <Select value={branchId} onValueChange={setBranchId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filiale wählen" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm text-muted-foreground">Tätigkeit</label>
-                <Select value={activityId} onValueChange={setActivityId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Tätigkeit wählen" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
-                    {activities
-                      .filter((a) => BACKFILL_ACTIVITY_NAMES.includes(a.name as any))
-                      .map((a) => (
-                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm text-muted-foreground">Pause (Minuten)</label>
-                <Input type="number" min={0} value={pauseMin} onChange={(e) => setPauseMin(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Grund / Notiz</label>
-              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Warum wird nachgetragen?" />
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={submitBackfill} disabled={saving}>
-                {saving ? 'Speichern…' : 'Nachtrag speichern'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
     </>
   );
 }

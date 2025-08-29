@@ -1,15 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Building2, Briefcase, WifiOff, Calendar as CalendarIcon } from "lucide-react";
 import OnboardingWizard from "./track/OnboardingWizard";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
 const BRANCHES = ["SPZ", "J&C", "TAL", "BÜRO", "SPW", "SPR"] as const;
 const ACTIVITIES = ["Ordnung", "Verkauf", "Social Media", "OLS", "Ordern", "Meeting"] as const;
+
+const BACKFILL_ACTIVITY_NAMES = [
+  "Ordnung",
+  "Verkauf", 
+  "Social Media",
+  "OLS",
+  "Ordern",
+  "Meeting",
+] as const;
 
 function formatTime(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -48,6 +64,16 @@ export default function Track() {
   const branchIdByName = useRef<Record<string, string>>({});
   const activityIdByName = useRef<Record<string, string>>({});
   const [todayAbsence, setTodayAbsence] = useState<string | null>(null);
+  
+  // Backfill state
+  const [backfillDate, setBackfillDate] = useState<Date | undefined>(new Date());
+  const [backfillStartTime, setBackfillStartTime] = useState<string>('09:00');
+  const [backfillEndTime, setBackfillEndTime] = useState<string>('17:00');
+  const [backfillPauseMin, setBackfillPauseMin] = useState<string>('0');
+  const [backfillBranchId, setBackfillBranchId] = useState<string>('');
+  const [backfillActivityId, setBackfillActivityId] = useState<string>('');
+  const [backfillReason, setBackfillReason] = useState<string>('');
+  const [backfillSaving, setBackfillSaving] = useState(false);
 
   const elapsed = useMemo(() => {
     if (!session) return 0;
@@ -365,6 +391,66 @@ export default function Track() {
     }
   };
 
+  // Backfill functionality
+  function buildDateTime(d: Date, time: string) {
+    const [hh, mm] = time.split(':').map(Number);
+    const copy = new Date(d);
+    copy.setHours(hh || 0, mm || 0, 0, 0);
+    return copy;
+  }
+
+  const submitBackfill = async () => {
+    if (!backfillDate || !backfillStartTime || !backfillEndTime) {
+      toast({ title: 'Angaben unvollständig', description: 'Datum, Start und Ende sind erforderlich.' });
+      return;
+    }
+    const startDt = buildDateTime(backfillDate, backfillStartTime);
+    const endDt = buildDateTime(backfillDate, backfillEndTime);
+    if (endDt <= startDt) {
+      toast({ title: 'Ungültiger Zeitraum', description: 'Ende muss nach Start liegen.', variant: 'destructive' });
+      return;
+    }
+    const pausedSeconds = Math.max(0, Math.floor((Number(backfillPauseMin) || 0) * 60));
+
+    setBackfillSaving(true);
+    try {
+      if (!user) {
+        toast({ title: 'Nicht angemeldet', description: 'Bitte melden Sie sich an, um Zeiten nachzutragen.', variant: 'destructive' });
+        return;
+      }
+      
+      const payload: any = {
+        user_id: user.id,
+        started_at: startDt.toISOString(),
+        ended_at: endDt.toISOString(),
+        paused_seconds: pausedSeconds,
+        notes: backfillReason || null,
+        branch_id: backfillBranchId || null,
+        activity_id: backfillActivityId || null,
+      };
+      const { error } = await supabase.from('time_entries').insert(payload);
+      if (error) throw error;
+      
+      // Trigger storage event to refresh other components
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'time_entries_updated',
+        newValue: Date.now().toString()
+      }));
+        
+      toast({ title: 'Stunden nachgetragen', description: 'Eintrag in Supabase gespeichert.' });
+      
+      // Reset form
+      setBackfillReason('');
+      setBackfillBranchId('');
+      setBackfillActivityId('');
+      setBackfillPauseMin('0');
+    } catch (e: any) {
+      toast({ title: 'Fehler beim Speichern', description: e.message || String(e), variant: 'destructive' });
+    } finally {
+      setBackfillSaving(false);
+    }
+  };
+
   useEffect(() => {
     document.title = 'Tracken – Crafton Time';
     const meta = document.querySelector('meta[name="description"]');
@@ -541,6 +627,91 @@ export default function Track() {
               </div>
             </div>
           </aside>
+          
+          {/* Backfill section */}
+          <section className="md:col-span-2 mt-6">
+            <Card>
+              <CardHeader><CardTitle>Stunden nachtragen</CardTitle></CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-muted-foreground">Datum</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("justify-start font-normal", !backfillDate && "text-muted-foreground")}> 
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {backfillDate ? backfillDate.toLocaleDateString() : <span>Datum wählen</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="z-50 w-auto p-0" align="start">
+                        <Calendar 
+                          mode="single" 
+                          selected={backfillDate}
+                          onSelect={setBackfillDate}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-muted-foreground">Start</label>
+                    <Input type="time" value={backfillStartTime} onChange={(e) => setBackfillStartTime(e.target.value)} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-muted-foreground">Ende</label>
+                    <Input type="time" value={backfillEndTime} onChange={(e) => setBackfillEndTime(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-muted-foreground">Filiale</label>
+                    <Select value={backfillBranchId} onValueChange={setBackfillBranchId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Filiale wählen" />
+                      </SelectTrigger>
+                      <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
+                        {Object.entries(branchIdByName.current).map(([name, id]) => (
+                          <SelectItem key={id} value={id}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-muted-foreground">Tätigkeit</label>
+                    <Select value={backfillActivityId} onValueChange={setBackfillActivityId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Tätigkeit wählen" />
+                      </SelectTrigger>
+                      <SelectContent className="z-50 bg-popover text-popover-foreground border rounded-md shadow-md">
+                        {Object.entries(activityIdByName.current)
+                          .filter(([name]) => BACKFILL_ACTIVITY_NAMES.includes(name as any))
+                          .map(([name, id]) => (
+                            <SelectItem key={id} value={id}>{name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-muted-foreground">Pause (Minuten)</label>
+                    <Input type="number" min={0} value={backfillPauseMin} onChange={(e) => setBackfillPauseMin(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm text-muted-foreground">Grund / Notiz</label>
+                  <Textarea value={backfillReason} onChange={(e) => setBackfillReason(e.target.value)} placeholder="Warum wird nachgetragen?" />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button onClick={submitBackfill} disabled={backfillSaving}>
+                    {backfillSaving ? 'Speichern…' : 'Nachtrag speichern'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
         </>
       )}
     </section>

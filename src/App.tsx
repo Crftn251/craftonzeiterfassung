@@ -33,10 +33,10 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={<AppShell />}>
                 <Route index element={<RequireAuth><Track /></RequireAuth>} />
-                <Route path="profil" element={<ProfileAnalytics />} />
-                <Route path="historie" element={<HistoryPage />} />
-                <Route path="einstellungen" element={<SettingsPage />} />
-                <Route path="admin" element={<AdminPage />} />
+                <Route path="profil" element={<RequireAuth><ProfileAnalytics /></RequireAuth>} />
+                <Route path="historie" element={<RequireAuth><HistoryPage /></RequireAuth>} />
+                <Route path="einstellungen" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+                <Route path="admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
                 <Route path="login" element={<Auth />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

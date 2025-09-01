@@ -169,14 +169,22 @@ export default function FormattedTimeEntries() {
       ''
     ]);
     
+    // Sanitize CSV cells to prevent formula injection
+    const sanitizeCsvCell = (cell: any): string => {
+      const str = String(cell);
+      // Prevent formula injection by escaping cells that start with dangerous characters
+      const dangerousStart = /^[=+\-@\t\r]/;
+      const sanitized = dangerousStart.test(str) ? "'" + str : str;
+      
+      // Handle separators and quotes
+      if (sanitized.includes(';') || sanitized.includes('\n') || sanitized.includes('"')) {
+        return '"' + sanitized.replace(/"/g, '""') + '"';
+      }
+      return sanitized;
+    };
+
     const csv = [header, ...allRows]
-      .map(row => row.map(cell => {
-        const str = String(cell);
-        if (str.includes(';') || str.includes('\n') || str.includes('"')) {
-          return '"' + str.replace(/"/g, '""') + '"';
-        }
-        return str;
-      }).join(';'))
+      .map(row => row.map(sanitizeCsvCell).join(';'))
       .join('\n');
     
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });

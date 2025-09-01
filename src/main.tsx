@@ -54,6 +54,9 @@ try {
 } catch (e) {
   console.error('[Boot] Render failed', e);
   if (rootEl) {
-    rootEl.innerHTML = `<pre style="padding:16px">App crash: ${String(e)}</pre>`;
+    const errorEl = document.createElement('pre');
+    errorEl.style.padding = '16px';
+    errorEl.textContent = `App crash: ${String(e)}`;
+    rootEl.appendChild(errorEl);
   }
 }

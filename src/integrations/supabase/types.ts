@@ -294,6 +294,14 @@ export type Database = {
       }
     }
     Functions: {
+      can_update_profile: {
+        Args: {
+          new_role: string
+          new_weekly_goal: number
+          target_user_id: string
+        }
+        Returns: boolean
+      }
       is_admin: {
         Args: { uid: string }
         Returns: boolean

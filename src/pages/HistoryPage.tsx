@@ -136,10 +136,14 @@ export default function HistoryPage() {
 
   function toCsvValue(v: any) {
     const s = String(v ?? "");
-    if (s.includes(";") || s.includes("\n") || s.includes('"')) {
-      return '"' + s.replace(/"/g, '""') + '"';
+    // Prevent formula injection by escaping cells that start with dangerous characters
+    const dangerousStart = /^[=+\-@\t\r]/;
+    const sanitized = dangerousStart.test(s) ? "'" + s : s;
+    
+    if (sanitized.includes(";") || sanitized.includes("\n") || sanitized.includes('"')) {
+      return '"' + sanitized.replace(/"/g, '""') + '"';
     }
-    return s;
+    return sanitized;
   }
 
   const secondsToHHMM = (seconds: number): string => {

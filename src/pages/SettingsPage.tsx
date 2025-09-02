@@ -65,34 +65,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Verbindung</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Supabase URL</label>
-              <Input 
-                type="url" 
-                value={supabaseUrl} 
-                onChange={(e) => setSupabaseUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-            
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Supabase Anon Key</label>
-              <Input 
-                type="password" 
-                value={supabaseAnon} 
-                onChange={(e) => setSupabaseAnon(e.target.value)}
-                placeholder="eyJ..."
-              />
-            </div>
-            
-            <Button onClick={save}>Speichern</Button>
-          </CardContent>
-        </Card>
       </section>
     </>
   );

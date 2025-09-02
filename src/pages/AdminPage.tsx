@@ -198,18 +198,19 @@ export default function AdminPage() {
       <h1 className="sr-only">Admin – Crafton Time</h1>
       
       <section className="grid gap-6">
+        {/* Weekly Goals Management */}
         <Card>
           <CardHeader>
             <CardTitle>Wochenstunden-Ziele verwalten</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Benutzer auswählen</label>
+          <CardContent className="space-y-6">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Benutzer auswählen</label>
               <Select value={selectedUserId} onValueChange={handleUserSelect}>
-                <SelectTrigger>
+                <SelectTrigger className="min-touch">
                   <SelectValue placeholder="Benutzer wählen" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-background z-50">
                   {profiles.map((profile) => (
                     <SelectItem key={profile.id} value={profile.id}>
                       {profile.display_name || profile.email} ({profile.weekly_goal_hours}h/Woche)
@@ -219,8 +220,8 @@ export default function AdminPage() {
               </Select>
             </div>
             
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Wochenstunden-Ziel</label>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Wochenstunden-Ziel</label>
               <Input 
                 type="number" 
                 min="1" 
@@ -228,30 +229,38 @@ export default function AdminPage() {
                 value={weeklyGoal} 
                 onChange={(e) => setWeeklyGoal(e.target.value)}
                 placeholder="40"
+                className="min-touch"
               />
               <p className="text-xs text-muted-foreground">
                 Zwischen 1 und 80 Stunden pro Woche
               </p>
             </div>
             
-            <Button onClick={saveWeeklyGoal} disabled={saving || !selectedUserId}>
-              {saving ? 'Speichern...' : 'Ziel speichern'}
-            </Button>
+            <div className="flex justify-start">
+              <Button 
+                onClick={saveWeeklyGoal} 
+                disabled={saving || !selectedUserId}
+                className="min-touch"
+              >
+                {saving ? 'Speichern...' : 'Ziel speichern'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
+        {/* Activity Management */}
         <Card>
           <CardHeader>
             <CardTitle>Tätigkeiten pro Benutzer verwalten</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Benutzer auswählen</label>
+          <CardContent className="space-y-6">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Benutzer auswählen</label>
               <Select value={selectedUserIdForActivities} onValueChange={handleUserSelectForActivities}>
-                <SelectTrigger>
+                <SelectTrigger className="min-touch">
                   <SelectValue placeholder="Benutzer wählen" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-background z-50">
                   {profiles.map((profile) => (
                     <SelectItem key={profile.id} value={profile.id}>
                       {profile.display_name || profile.email}
@@ -263,51 +272,64 @@ export default function AdminPage() {
 
             {selectedUserIdForActivities && (
               <>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-muted-foreground">Erlaubte Tätigkeiten</label>
-                  <p className="text-xs text-muted-foreground mb-3">
+                <div className="grid gap-3">
+                  <label className="text-sm font-medium text-muted-foreground">Erlaubte Tätigkeiten</label>
+                  <p className="text-xs text-muted-foreground">
                     Wählen Sie die Tätigkeiten aus, die dieser Benutzer verwenden darf. Ohne Auswahl sind alle Tätigkeiten erlaubt.
                   </p>
-                  <div className="space-y-3 max-h-60 overflow-y-auto border rounded p-3">
-                    {activities.map((activity) => (
-                      <div key={activity.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={activity.id}
-                          checked={userActivities.includes(activity.id)}
-                          onCheckedChange={(checked) => handleActivityToggle(activity.id, !!checked)}
-                        />
-                        <label 
-                          htmlFor={activity.id} 
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {activity.name}
-                        </label>
-                      </div>
-                    ))}
+                  <div className="border rounded-lg p-4 max-h-60 overflow-y-auto bg-muted/20">
+                    <div className="grid gap-3">
+                      {activities.map((activity) => (
+                        <div key={activity.id} className="flex items-center space-x-3">
+                          <Checkbox
+                            id={activity.id}
+                            checked={userActivities.includes(activity.id)}
+                            onCheckedChange={(checked) => handleActivityToggle(activity.id, !!checked)}
+                            className="min-touch"
+                          />
+                          <label 
+                            htmlFor={activity.id} 
+                            className="text-sm font-medium leading-none cursor-pointer flex-1 py-2"
+                          >
+                            {activity.name}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <Button onClick={saveUserActivities} disabled={savingActivities}>
-                  {savingActivities ? 'Speichern...' : 'Tätigkeiten speichern'}
-                </Button>
+                <div className="flex justify-start">
+                  <Button 
+                    onClick={saveUserActivities} 
+                    disabled={savingActivities}
+                    className="min-touch"
+                  >
+                    {savingActivities ? 'Speichern...' : 'Tätigkeiten speichern'}
+                  </Button>
+                </div>
               </>
             )}
           </CardContent>
         </Card>
 
+        {/* User Overview */}
         <Card>
           <CardHeader>
             <CardTitle>Benutzerübersicht</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
+            <div className="grid gap-3">
               {profiles.map((profile) => (
-                <div key={profile.id} className="flex justify-between items-center p-2 border rounded">
-                  <div>
-                    <span className="font-medium">{profile.display_name || profile.email}</span>
-                    <span className="text-sm text-muted-foreground ml-2">({profile.role})</span>
+                <div key={profile.id} className="flex justify-between items-center p-4 border rounded-lg bg-muted/10">
+                  <div className="flex flex-col gap-1">
+                    <span className="font-medium text-sm">{profile.display_name || profile.email}</span>
+                    <span className="text-xs text-muted-foreground">Rolle: {profile.role}</span>
                   </div>
-                  <span className="text-sm">{profile.weekly_goal_hours}h/Woche</span>
+                  <div className="text-right">
+                    <span className="text-sm font-medium">{profile.weekly_goal_hours}h</span>
+                    <div className="text-xs text-muted-foreground">pro Woche</div>
+                  </div>
                 </div>
               ))}
             </div>

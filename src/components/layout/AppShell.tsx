@@ -3,6 +3,8 @@ import { BarChart3, History, Settings, ShieldCheck, LogOut, Timer, LogIn } from 
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsAdmin } from "@/hooks/use-admin";
+import { useIsMobile } from "@/hooks/use-mobile";
 const navItems = [
   { to: "/", label: "Tracken", icon: Timer },
   { to: "/profil", label: "Profil", icon: BarChart3 },
@@ -13,6 +15,8 @@ const navItems = [
 
 export default function AppShell() {
   const [user, setUser] = useState<any>(null);
+  const { isAdmin } = useIsAdmin();
+  const isMobile = useIsMobile();
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
     const meta = document.querySelector('meta[name="description"]');
@@ -43,8 +47,8 @@ export default function AppShell() {
             <span className="font-semibold tracking-tight">Crafton Time</span>
           </div>
           <div className="hidden md:flex items-center gap-2">
-            {navItems.map(({ to, label }) => (
-              <NavLink key={to} to={to} end className={({ isActive }) => `px-3 py-1.5 rounded-md transition-colors ${isActive ? 'bg-secondary text-foreground' : 'hover:bg-secondary'}`}>
+            {navItems.filter(item => item.to !== '/admin' || isAdmin).map(({ to, label }) => (
+              <NavLink key={to} to={to} end className={({ isActive }) => `px-3 py-1.5 rounded-md transition-colors min-touch ${isActive ? 'bg-secondary text-foreground' : 'hover:bg-secondary'}`}>
                 {label}
               </NavLink>
             ))}
@@ -63,20 +67,21 @@ export default function AppShell() {
         </div>
       </header>
 
-      <main className="container py-6">
+      <main className="container py-6 pb-safe-nav md:pb-6">
         <Outlet />
       </main>
 
       {/* Login-Dialog entfernt – bitte /login zum Anmelden verwenden */}
 
       {/* Bottom Nav on mobile */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur md:hidden">
-        <ul className={`grid ${user ? 'grid-cols-6' : 'grid-cols-5'}`}>
-          {navItems.map(({ to, label, icon: Icon }) => (
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur pb-safe md:hidden">
+        <ul className={`grid ${user ? (isAdmin ? 'grid-cols-6' : 'grid-cols-5') : 'grid-cols-4'}`}>
+          {navItems.filter(item => item.to !== '/admin' || isAdmin).map(({ to, label, icon: Icon }) => (
             <li key={to}>
-              <NavLink to={to} end className={({ isActive }) => `flex flex-col items-center gap-1 py-2 text-xs ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
+              <NavLink to={to} end className={({ isActive }) => `flex flex-col items-center gap-1 py-3 px-2 text-xs min-touch ${isActive ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
                 <Icon className="h-5 w-5" />
-                {label}
+                {!isMobile && <span>{label}</span>}
+                {isMobile && <span className="text-[10px] leading-tight">{label}</span>}
               </NavLink>
             </li>
           ))}
@@ -84,17 +89,19 @@ export default function AppShell() {
             <li>
               <button 
                 onClick={() => supabase.auth.signOut()}
-                className="flex flex-col items-center gap-1 py-2 text-xs text-muted-foreground w-full"
+                className="flex flex-col items-center gap-1 py-3 px-2 text-xs text-muted-foreground w-full min-touch"
               >
                 <LogOut className="h-5 w-5" />
-                Logout
+                {!isMobile && <span>Logout</span>}
+                {isMobile && <span className="text-[10px] leading-tight">Logout</span>}
               </button>
             </li>
           ) : (
             <li>
-              <NavLink to="/login" className="flex flex-col items-center gap-1 py-2 text-xs text-muted-foreground">
+              <NavLink to="/login" className="flex flex-col items-center gap-1 py-3 px-2 text-xs text-muted-foreground min-touch">
                 <LogIn className="h-5 w-5" />
-                Login
+                {!isMobile && <span>Login</span>}
+                {isMobile && <span className="text-[10px] leading-tight">Login</span>}
               </NavLink>
             </li>
           )}

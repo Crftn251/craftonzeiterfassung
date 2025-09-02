@@ -6,12 +6,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Play, Pause, Square, Plus, Calendar, MapPin, Briefcase } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useStopwatch } from "react-timer-hook";
+import { useIsMobile } from "@/hooks/use-mobile";
 import AssignmentManager from "./track/AssignmentManager";
 
 interface Branch {
@@ -47,6 +49,7 @@ export default function Track() {
   const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
   const [allActivities, setAllActivities] = useState<string[]>([]);
   const [userActivities, setUserActivities] = useState<string[]>([]);
+  const isMobile = useIsMobile();
 
   // Backfill state
   const [showBackfill, setShowBackfill] = useState(false);
@@ -474,29 +477,29 @@ export default function Track() {
           <CardContent className="space-y-6">
             {/* Timer Display */}
             <div className="text-center">
-              <div className="text-6xl font-mono font-bold mb-4">
+              <div className="text-4xl md:text-6xl font-mono font-bold mb-4">
                 {formatTime(totalSeconds)}
               </div>
               <div className="flex justify-center gap-2 mb-6">
                 {!isTracking ? (
-                  <Button onClick={startTimer} size="lg" className="min-w-32">
+                  <Button onClick={startTimer} size="lg" className="min-w-32 min-touch">
                     <Play className="h-4 w-4 mr-2" />
                     Start
                   </Button>
                 ) : (
                   <>
                     {!isPaused ? (
-                      <Button onClick={pauseTimer} size="lg" variant="outline" className="min-w-32">
+                      <Button onClick={pauseTimer} size="lg" variant="outline" className="min-w-32 min-touch">
                         <Pause className="h-4 w-4 mr-2" />
                         Pause
                       </Button>
                     ) : (
-                      <Button onClick={resumeTimer} size="lg" className="min-w-32">
+                      <Button onClick={resumeTimer} size="lg" className="min-w-32 min-touch">
                         <Play className="h-4 w-4 mr-2" />
                         Fortsetzen
                       </Button>
                     )}
-                    <Button onClick={stopTimer} size="lg" variant="destructive" className="min-w-32">
+                    <Button onClick={stopTimer} size="lg" variant="destructive" className="min-w-32 min-touch">
                       <Square className="h-4 w-4 mr-2" />
                       Stop
                     </Button>
@@ -570,112 +573,226 @@ export default function Track() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Dialog open={showBackfill} onOpenChange={setShowBackfill}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Zeit nachtragen
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Zeit nachtragen</DialogTitle>
-                </DialogHeader>
-                
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="backfill-date">Datum</Label>
-                    <Input
-                      id="backfill-date"
-                      type="date"
-                      value={backfillDate}
-                      onChange={(e) => setBackfillDate(e.target.value)}
-                      max={format(new Date(), 'yyyy-MM-dd')}
-                    />
-                  </div>
+            {isMobile ? (
+              <Drawer open={showBackfill} onOpenChange={setShowBackfill}>
+                <DrawerTrigger asChild>
+                  <Button variant="outline" className="w-full min-touch">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Zeit nachtragen
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent className="px-4 pb-4">
+                  <DrawerHeader>
+                    <DrawerTitle>Zeit nachtragen</DrawerTitle>
+                  </DrawerHeader>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="backfill-start">Startzeit</Label>
+                      <Label htmlFor="backfill-date">Datum</Label>
                       <Input
-                        id="backfill-start"
-                        type="time"
-                        value={backfillStartTime}
-                        onChange={(e) => setBackfillStartTime(e.target.value)}
+                        id="backfill-date"
+                        type="date"
+                        value={backfillDate}
+                        onChange={(e) => setBackfillDate(e.target.value)}
+                        max={format(new Date(), 'yyyy-MM-dd')}
+                        className="min-touch"
                       />
                     </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="backfill-start">Startzeit</Label>
+                        <Input
+                          id="backfill-start"
+                          type="time"
+                          value={backfillStartTime}
+                          onChange={(e) => setBackfillStartTime(e.target.value)}
+                          className="min-touch"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="backfill-end">Endzeit</Label>
+                        <Input
+                          id="backfill-end"
+                          type="time"
+                          value={backfillEndTime}
+                          onChange={(e) => setBackfillEndTime(e.target.value)}
+                          className="min-touch"
+                        />
+                      </div>
+                    </div>
+                    
                     <div className="space-y-2">
-                      <Label htmlFor="backfill-end">Endzeit</Label>
-                      <Input
-                        id="backfill-end"
-                        type="time"
-                        value={backfillEndTime}
-                        onChange={(e) => setBackfillEndTime(e.target.value)}
+                      <Label htmlFor="backfill-branch">Filiale</Label>
+                      <Select value={backfillBranch} onValueChange={setBackfillBranch}>
+                        <SelectTrigger id="backfill-branch" className="min-touch">
+                          <SelectValue placeholder="Filiale wählen" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          {branches.map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id}>
+                              {branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-activity">Tätigkeit</Label>
+                      <Select value={backfillActivity} onValueChange={setBackfillActivity}>
+                        <SelectTrigger id="backfill-activity" className="min-touch">
+                          <SelectValue placeholder="Tätigkeit wählen" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          {backfillAvailableActivities.map((activity) => (
+                            <SelectItem key={activity.id} value={activity.id}>
+                              {activity.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-notes">Notizen (optional)</Label>
+                      <Textarea
+                        id="backfill-notes"
+                        value={backfillNotes}
+                        onChange={(e) => setBackfillNotes(e.target.value)}
+                        placeholder="Notizen zu dieser Zeiterfassung..."
+                        className="min-touch"
                       />
                     </div>
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button 
+                        onClick={submitBackfill} 
+                        disabled={isSubmittingBackfill}
+                        className="flex-1 min-touch"
+                      >
+                        {isSubmittingBackfill ? 'Speichern...' : 'Zeit eintragen'}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowBackfill(false)}
+                        disabled={isSubmittingBackfill}
+                        className="min-touch"
+                      >
+                        Abbrechen
+                      </Button>
+                    </div>
                   </div>
+                </DrawerContent>
+              </Drawer>
+            ) : (
+              <Dialog open={showBackfill} onOpenChange={setShowBackfill}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Zeit nachtragen
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Zeit nachtragen</DialogTitle>
+                  </DialogHeader>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="backfill-branch">Filiale</Label>
-                    <Select value={backfillBranch} onValueChange={setBackfillBranch}>
-                      <SelectTrigger id="backfill-branch">
-                        <SelectValue placeholder="Filiale wählen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-date">Datum</Label>
+                      <Input
+                        id="backfill-date"
+                        type="date"
+                        value={backfillDate}
+                        onChange={(e) => setBackfillDate(e.target.value)}
+                        max={format(new Date(), 'yyyy-MM-dd')}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="backfill-start">Startzeit</Label>
+                        <Input
+                          id="backfill-start"
+                          type="time"
+                          value={backfillStartTime}
+                          onChange={(e) => setBackfillStartTime(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="backfill-end">Endzeit</Label>
+                        <Input
+                          id="backfill-end"
+                          type="time"
+                          value={backfillEndTime}
+                          onChange={(e) => setBackfillEndTime(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-branch">Filiale</Label>
+                      <Select value={backfillBranch} onValueChange={setBackfillBranch}>
+                        <SelectTrigger id="backfill-branch">
+                          <SelectValue placeholder="Filiale wählen" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          {branches.map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id}>
+                              {branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-activity">Tätigkeit</Label>
+                      <Select value={backfillActivity} onValueChange={setBackfillActivity}>
+                        <SelectTrigger id="backfill-activity">
+                          <SelectValue placeholder="Tätigkeit wählen" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          {backfillAvailableActivities.map((activity) => (
+                            <SelectItem key={activity.id} value={activity.id}>
+                              {activity.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="backfill-notes">Notizen (optional)</Label>
+                      <Textarea
+                        id="backfill-notes"
+                        value={backfillNotes}
+                        onChange={(e) => setBackfillNotes(e.target.value)}
+                        placeholder="Notizen zu dieser Zeiterfassung..."
+                      />
+                    </div>
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button 
+                        onClick={submitBackfill} 
+                        disabled={isSubmittingBackfill}
+                        className="flex-1"
+                      >
+                        {isSubmittingBackfill ? 'Speichern...' : 'Zeit eintragen'}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowBackfill(false)}
+                        disabled={isSubmittingBackfill}
+                      >
+                        Abbrechen
+                      </Button>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="backfill-activity">Tätigkeit</Label>
-                    <Select value={backfillActivity} onValueChange={setBackfillActivity}>
-                      <SelectTrigger id="backfill-activity">
-                        <SelectValue placeholder="Tätigkeit wählen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {backfillAvailableActivities.map((activity) => (
-                          <SelectItem key={activity.id} value={activity.id}>
-                            {activity.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="backfill-notes">Notizen (optional)</Label>
-                    <Textarea
-                      id="backfill-notes"
-                      value={backfillNotes}
-                      onChange={(e) => setBackfillNotes(e.target.value)}
-                      placeholder="Notizen zu dieser Zeiterfassung..."
-                    />
-                  </div>
-                  
-                  <div className="flex gap-2 pt-4">
-                    <Button 
-                      onClick={submitBackfill} 
-                      disabled={isSubmittingBackfill}
-                      className="flex-1"
-                    >
-                      {isSubmittingBackfill ? 'Speichern...' : 'Zeit eintragen'}
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setShowBackfill(false)}
-                      disabled={isSubmittingBackfill}
-                    >
-                      Abbrechen
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
+            )}
           </CardContent>
         </Card>
       </section>

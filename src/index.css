@@ -111,4 +111,9 @@ All colors MUST be HSL.
 
 @layer components {
   .hover-scale { @apply transition-transform duration-200 hover:scale-105; }
+  
+  /* Safe area utilities for mobile */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pb-safe-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 4.5rem); }
+  .min-touch { min-height: 44px; min-width: 44px; }
 }

@@ -33,6 +33,7 @@ interface TimerContextType {
   pauseTimer: () => Promise<void>;
   resumeTimer: () => Promise<void>;
   stopTimer: () => Promise<void>;
+  switchActivity: (newActivityId: string, newBranchId?: string) => Promise<void>;
   resumeExistingEntry: (entry: TimeEntry) => Promise<void>;
   discardExistingEntry: (entry: TimeEntry) => Promise<void>;
 }
@@ -249,6 +250,67 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const switchActivity = async (newActivityId: string, newBranchId?: string) => {
+    if (!currentEntry) return;
+    
+    try {
+      // Stop the current timer first
+      let finalPausedSeconds = currentEntry.paused_seconds;
+      
+      if (isPaused && pauseStartedAt) {
+        const additionalPauseTime = Math.floor((Date.now() - pauseStartedAt.getTime()) / 1000);
+        finalPausedSeconds += additionalPauseTime;
+      }
+
+      const { error: stopError } = await supabase
+        .from('time_entries')
+        .update({
+          ended_at: new Date().toISOString(),
+          paused_seconds: finalPausedSeconds
+        })
+        .eq('id', currentEntry.id);
+
+      if (stopError) throw stopError;
+
+      // Start new timer with new activity
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user?.id) return;
+
+      const { data: newEntry, error: startError } = await supabase
+        .from('time_entries')
+        .insert({
+          user_id: user.user.id,
+          branch_id: newBranchId || currentEntry.branch_id,
+          activity_id: newActivityId,
+          started_at: new Date().toISOString(),
+          notes: currentEntry.notes
+        })
+        .select()
+        .single();
+
+      if (startError) throw startError;
+
+      setCurrentEntry(newEntry);
+      setIsPaused(false);
+      setPauseStartedAt(null);
+      
+      // Reset and start timer
+      reset();
+      start();
+
+      toast({
+        title: "Aktivität gewechselt",
+        description: "Die Aktivität wurde erfolgreich gewechselt."
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fehler",
+        description: "Aktivität konnte nicht gewechselt werden.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const discardExistingEntry = async (entry: TimeEntry) => {
     try {
       const { error } = await supabase
@@ -291,6 +353,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     pauseTimer,
     resumeTimer,
     stopTimer,
+    switchActivity,
     resumeExistingEntry,
     discardExistingEntry
   };

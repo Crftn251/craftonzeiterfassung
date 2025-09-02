@@ -15,6 +15,7 @@ import { de } from "date-fns/locale";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AssignmentManager from "./track/AssignmentManager";
 import { useTimer } from "@/contexts/TimerContext";
+import InitialSelectionModal from "@/components/InitialSelectionModal";
 
 interface Branch {
   id: string;
@@ -47,6 +48,7 @@ export default function Track() {
   const [userActivities, setUserActivities] = useState<string[]>([]);
   const [pendingEntry, setPendingEntry] = useState<TimeEntry | null>(null);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [showInitialSelection, setShowInitialSelection] = useState(false);
   
   // Timer context
   const { 
@@ -58,6 +60,7 @@ export default function Track() {
     pauseTimer: contextPauseTimer,
     resumeTimer: contextResumeTimer,
     stopTimer: contextStopTimer,
+    switchActivity: contextSwitchActivity,
     resumeExistingEntry: contextResumeExistingEntry,
     discardExistingEntry: contextDiscardExistingEntry
   } = useTimer();
@@ -207,16 +210,24 @@ export default function Track() {
   }, [backfillActivity, backfillAvailableActivities]);
 
   const startTimer = async () => {
-    if (!selectedBranch || !selectedActivity) {
-      toast({
-        title: "Unvollständige Auswahl",
-        description: "Bitte wählen Sie eine Filiale und Tätigkeit aus.",
-        variant: "destructive"
-      });
+    if (!isTracking && (!selectedBranch || !selectedActivity)) {
+      setShowInitialSelection(true);
       return;
     }
 
     await contextStartTimer(selectedBranch, selectedActivity, notes);
+  };
+
+  const handleInitialSelection = async (branchId: string, activityId: string) => {
+    setSelectedBranch(branchId);
+    setSelectedActivity(activityId);
+    setShowInitialSelection(false);
+    await contextStartTimer(branchId, activityId, notes);
+  };
+
+  const handleActivitySwitch = async (newActivityId: string) => {
+    await contextSwitchActivity(newActivityId, selectedBranch);
+    setSelectedActivity(newActivityId);
   };
 
   const pauseTimer = async () => {
@@ -403,6 +414,28 @@ export default function Track() {
                 )}
               </div>
             </div>
+
+            {/* Quick Activity Switch Buttons */}
+            {isTracking && (
+              <div className="space-y-2">
+                <Label>Schnellwechsel zu anderer Aktivität:</Label>
+                <div className="flex flex-wrap gap-2">
+                  {currentAvailableActivities
+                    .filter(activity => activity.id !== selectedActivity)
+                    .map((activity) => (
+                      <Button
+                        key={activity.id}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleActivitySwitch(activity.id)}
+                        className="min-touch"
+                      >
+                        {activity.name}
+                      </Button>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {/* Selection Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -763,6 +796,12 @@ export default function Track() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Initial Selection Modal */}
+      <InitialSelectionModal 
+        isOpen={showInitialSelection} 
+        onComplete={handleInitialSelection} 
+      />
     </>
   );
 }

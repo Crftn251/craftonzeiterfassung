@@ -615,14 +615,14 @@ export default function Track() {
         </Card>
 
         {/* Manual Entry Card */}
-        <Card>
+        <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
               Zeiten nachtragen
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pb-8">
             {isMobile ? (
               <Drawer open={showBackfill} onOpenChange={setShowBackfill}>
                 <DrawerTrigger asChild>

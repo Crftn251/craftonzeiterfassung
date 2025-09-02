@@ -13,6 +13,7 @@ import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import RequireAuth from "@/components/auth/RequireAuth";
+import { TimerProvider } from "@/contexts/TimerContext";
 
 // Create QueryClient with proper configuration
 const queryClient = new QueryClient({
@@ -28,23 +29,25 @@ const App: React.FC = () => {
   return (
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<AppShell />}>
-                <Route index element={<RequireAuth><Track /></RequireAuth>} />
-                <Route path="profil" element={<RequireAuth><ProfileAnalytics /></RequireAuth>} />
-                <Route path="historie" element={<RequireAuth><HistoryPage /></RequireAuth>} />
-                <Route path="einstellungen" element={<RequireAuth><SettingsPage /></RequireAuth>} />
-                <Route path="admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
-                <Route path="login" element={<Auth />} />
-              </Route>
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-          <Toaster />
-        </TooltipProvider>
+        <TimerProvider>
+          <TooltipProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<AppShell />}>
+                  <Route index element={<RequireAuth><Track /></RequireAuth>} />
+                  <Route path="profil" element={<RequireAuth><ProfileAnalytics /></RequireAuth>} />
+                  <Route path="historie" element={<RequireAuth><HistoryPage /></RequireAuth>} />
+                  <Route path="einstellungen" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+                  <Route path="admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
+                  <Route path="login" element={<Auth />} />
+                </Route>
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+            <Toaster />
+          </TooltipProvider>
+        </TimerProvider>
       </QueryClientProvider>
     </React.StrictMode>
   );

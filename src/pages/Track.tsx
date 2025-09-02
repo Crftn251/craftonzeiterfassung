@@ -12,9 +12,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Play, Pause, Square, Plus, Calendar, MapPin, Briefcase } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { useStopwatch } from "react-timer-hook";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AssignmentManager from "./track/AssignmentManager";
+import { useTimer } from "@/contexts/TimerContext";
 
 interface Branch {
   id: string;
@@ -42,17 +42,25 @@ export default function Track() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedActivity, setSelectedActivity] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
-  const [isTracking, setIsTracking] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [pauseStartedAt, setPauseStartedAt] = useState<Date | null>(null);
-  const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
   const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
   const [allActivities, setAllActivities] = useState<string[]>([]);
   const [userActivities, setUserActivities] = useState<string[]>([]);
-  // Resume state
-  const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [pendingEntry, setPendingEntry] = useState<TimeEntry | null>(null);
-  const isMobile = useIsMobile();
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  
+  // Timer context
+  const { 
+    isTracking, 
+    isPaused, 
+    currentEntry, 
+    stopwatch, 
+    startTimer: contextStartTimer,
+    pauseTimer: contextPauseTimer,
+    resumeTimer: contextResumeTimer,
+    stopTimer: contextStopTimer,
+    resumeExistingEntry: contextResumeExistingEntry,
+    discardExistingEntry: contextDiscardExistingEntry
+  } = useTimer();
 
   // Backfill state
   const [showBackfill, setShowBackfill] = useState(false);
@@ -64,15 +72,7 @@ export default function Track() {
   const [backfillNotes, setBackfillNotes] = useState<string>('');
   const [isSubmittingBackfill, setIsSubmittingBackfill] = useState(false);
 
-  const {
-    totalSeconds,
-    seconds,
-    minutes,
-    hours,
-    start,
-    pause,
-    reset,
-  } = useStopwatch({ autoStart: false });
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     document.title = 'Zeiterfassung – Crafton Time';
@@ -115,20 +115,21 @@ export default function Track() {
       // Load branch-activity assignments
       await loadBranchActivities();
 
-      // Check for active time entry
-      const { data: activeEntry } = await supabase
-        .from('time_entries')
-        .select('*')
-        .eq('user_id', user.user.id)
-        .is('ended_at', null)
-        .order('started_at', { ascending: false })
-        .limit(1)
-        .single();
+      // Check for active time entry - only if timer context doesn't have one
+      if (!currentEntry) {
+        const { data: activeEntry } = await supabase
+          .from('time_entries')
+          .select('*')
+          .eq('user_id', user.user.id)
+          .is('ended_at', null)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .single();
 
-      if (activeEntry) {
-        // Don't auto-resume, show confirmation dialog instead
-        setPendingEntry(activeEntry);
-        setShowResumeDialog(true);
+        if (activeEntry) {
+          setPendingEntry(activeEntry);
+          setShowResumeDialog(true);
+        }
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -215,195 +216,40 @@ export default function Track() {
       return;
     }
 
-    try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user?.id) return;
-
-      const { data: entry, error } = await supabase
-        .from('time_entries')
-        .insert({
-          user_id: user.user.id,
-          branch_id: selectedBranch,
-          activity_id: selectedActivity,
-          started_at: new Date().toISOString(),
-          notes: notes || null
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setCurrentEntry(entry);
-      setIsTracking(true);
-      setPauseStartedAt(null);
-      
-      start();
-
-      toast({
-        title: "Timer gestartet",
-        description: "Die Zeiterfassung wurde gestartet."
-      });
-    } catch (error: any) {
-      toast({
-        title: "Fehler",
-        description: error.message || "Timer konnte nicht gestartet werden.",
-        variant: "destructive"
-      });
-    }
+    await contextStartTimer(selectedBranch, selectedActivity, notes);
   };
 
   const pauseTimer = async () => {
-    if (!currentEntry) return;
-
-    try {
-      pause();
-      setIsPaused(true);
-      setPauseStartedAt(new Date());
-
-      toast({
-        title: "Timer pausiert",
-        description: "Die Zeiterfassung wurde pausiert."
-      });
-    } catch (error: any) {
-      toast({
-        title: "Fehler",
-        description: error.message || "Timer konnte nicht pausiert werden.",
-        variant: "destructive"
-      });
-    }
+    await contextPauseTimer();
   };
 
   const resumeTimer = async () => {
-    if (!currentEntry || !pauseStartedAt) return;
-
-    try {
-      const pauseDuration = Math.floor((new Date().getTime() - pauseStartedAt.getTime()) / 1000);
-      const newPausedSeconds = currentEntry.paused_seconds + pauseDuration;
-
-      const { error } = await supabase
-        .from('time_entries')
-        .update({ paused_seconds: newPausedSeconds })
-        .eq('id', currentEntry.id);
-
-      if (error) throw error;
-
-      setCurrentEntry({ ...currentEntry, paused_seconds: newPausedSeconds });
-      start();
-      setIsPaused(false);
-      setPauseStartedAt(null);
-
-      toast({
-        title: "Timer fortgesetzt",
-        description: "Die Zeiterfassung wurde fortgesetzt."
-      });
-    } catch (error: any) {
-      toast({
-        title: "Fehler",
-        description: error.message || "Timer konnte nicht fortgesetzt werden.",
-        variant: "destructive"
-      });
-    }
+    await contextResumeTimer();
   };
 
-  const resumeExistingEntry = () => {
+  const stopTimer = async () => {
+    await contextStopTimer();
+    // Reset form after stopping
+    setNotes('');
+  };
+
+  const resumeExistingEntry = async () => {
     if (!pendingEntry) return;
 
-    setCurrentEntry(pendingEntry);
-    setIsTracking(true);
+    await contextResumeExistingEntry(pendingEntry);
     setSelectedBranch(pendingEntry.branch_id || '');
     setSelectedActivity(pendingEntry.activity_id || '');
     setNotes(pendingEntry.notes || '');
-    
-    const startTime = new Date(pendingEntry.started_at);
-    const now = new Date();
-    const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000) - pendingEntry.paused_seconds;
-    
-    // Set the stopwatch to the elapsed time and start it
-    reset(new Date(Date.now() - elapsedSeconds * 1000), true);
-    
     setShowResumeDialog(false);
     setPendingEntry(null);
-
-    toast({
-      title: "Session fortgesetzt",
-      description: "Die vorherige Zeiterfassung wurde fortgesetzt."
-    });
   };
 
   const discardExistingEntry = async () => {
     if (!pendingEntry) return;
 
-    try {
-      // End the existing entry
-      const { error } = await supabase
-        .from('time_entries')
-        .update({ 
-          ended_at: new Date().toISOString(),
-          paused_seconds: pendingEntry.paused_seconds
-        })
-        .eq('id', pendingEntry.id);
-
-      if (error) throw error;
-
-      setShowResumeDialog(false);
-      setPendingEntry(null);
-
-      toast({
-        title: "Vorherige Session beendet",
-        description: "Du kannst jetzt eine neue Zeiterfassung starten."
-      });
-    } catch (error: any) {
-      toast({
-        title: "Fehler",
-        description: error.message || "Vorherige Session konnte nicht beendet werden.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const stopTimer = async () => {
-    if (!currentEntry) return;
-
-    try {
-      const endTime = new Date().toISOString();
-      let finalPausedSeconds = currentEntry.paused_seconds;
-
-      // If currently paused, add the current pause duration
-      if (isPaused && pauseStartedAt) {
-        const currentPauseDuration = Math.floor((new Date().getTime() - pauseStartedAt.getTime()) / 1000);
-        finalPausedSeconds += currentPauseDuration;
-      }
-      
-      const { error } = await supabase
-        .from('time_entries')
-        .update({ 
-          ended_at: endTime,
-          paused_seconds: finalPausedSeconds,
-          notes: notes || null
-        })
-        .eq('id', currentEntry.id);
-
-      if (error) throw error;
-
-      pause();
-      reset();
-      setIsTracking(false);
-      setIsPaused(false);
-      setCurrentEntry(null);
-      setPauseStartedAt(null);
-      setNotes('');
-
-      toast({
-        title: "Timer gestoppt",
-        description: "Die Zeiterfassung wurde beendet und gespeichert."
-      });
-    } catch (error: any) {
-      toast({
-        title: "Fehler",
-        description: error.message || "Timer konnte nicht gestoppt werden.",
-        variant: "destructive"
-      });
-    }
+    await contextDiscardExistingEntry(pendingEntry);
+    setShowResumeDialog(false);
+    setPendingEntry(null);
   };
 
   const validateBackfillTimes = () => {
@@ -528,7 +374,7 @@ export default function Track() {
             {/* Timer Display */}
             <div className="text-center">
               <div className="text-4xl md:text-6xl font-mono font-bold mb-4">
-                {formatTime(totalSeconds)}
+                {formatTime(stopwatch.totalSeconds)}
               </div>
               <div className="flex justify-center gap-2 mb-6">
                 {!isTracking ? (
@@ -845,6 +691,14 @@ export default function Track() {
             )}
           </CardContent>
         </Card>
+
+        {/* Assignment Manager for Admins */}
+        <AssignmentManager
+          currentBranch={selectedBranch ? branches.find(b => b.id === selectedBranch)?.name || '' : ''}
+          branchActivities={branchActivities}
+          allActivities={allActivities}
+          onRefresh={loadBranchActivities}
+        />
       </section>
 
       {/* Resume Dialog */}

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/use-admin";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTimer } from "@/contexts/TimerContext";
 const navItems = [
   { to: "/", label: "Tracken", icon: Timer },
   { to: "/profil", label: "Profil", icon: BarChart3 },
@@ -17,6 +18,14 @@ export default function AppShell() {
   const [user, setUser] = useState<any>(null);
   const { isAdmin } = useIsAdmin();
   const isMobile = useIsMobile();
+  const { isTracking, isPaused, stopwatch } = useTimer();
+
+  const formatTime = (totalSeconds: number): string => {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
   useEffect(() => {
     document.title = "Crafton Time – Zeiterfassung";
     const meta = document.querySelector('meta[name="description"]');
@@ -45,6 +54,16 @@ export default function AppShell() {
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-xl" style={{ background: "var(--gradient-primary)" }} aria-hidden />
             <span className="font-semibold tracking-tight">Crafton Time</span>
+            {/* Timer indicator */}
+            {isTracking && (
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-mono ${
+                isPaused ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+              }`}>
+                <Timer className={`h-3 w-3 ${!isPaused ? 'animate-pulse' : ''}`} />
+                <span>{formatTime(stopwatch.totalSeconds)}</span>
+                {isPaused && <span className="text-xs">⏸</span>}
+              </div>
+            )}
           </div>
           <div className="hidden md:flex items-center gap-2">
             {navItems.filter(item => item.to !== '/admin' || isAdmin).map(({ to, label }) => (

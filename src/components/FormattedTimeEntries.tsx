@@ -33,9 +33,7 @@ export default function FormattedTimeEntries() {
   const fetchEntries = async () => {
     try {
       const { data, error } = await supabase
-        .from('v_time_entries_formatted')
-        .select('*')
-        .order('started_at', { ascending: false });
+        .rpc('get_time_entries_formatted');
 
       if (error) {
         console.error('Error fetching formatted time entries:', error);

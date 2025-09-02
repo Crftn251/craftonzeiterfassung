@@ -302,6 +302,33 @@ export type Database = {
         }
         Returns: boolean
       }
+      get_time_entries_formatted: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          activity_id: string
+          activity_name: string
+          branch_id: string
+          branch_name: string
+          created_at: string
+          date_local: string
+          end_local: string
+          ended_at: string
+          ended_utc: string
+          id: string
+          net_hhmm: string
+          net_seconds: number
+          notes: string
+          paused_seconds: number
+          start_local: string
+          started_at: string
+          started_utc: string
+          status: string
+          updated_at: string
+          user_display_name: string
+          user_email: string
+          user_id: string
+        }[]
+      }
       is_admin: {
         Args: { uid: string }
         Returns: boolean

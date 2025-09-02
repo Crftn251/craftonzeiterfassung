@@ -49,6 +49,9 @@ export default function Track() {
   const [branchActivities, setBranchActivities] = useState<Record<string, string[]>>({});
   const [allActivities, setAllActivities] = useState<string[]>([]);
   const [userActivities, setUserActivities] = useState<string[]>([]);
+  // Resume state
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [pendingEntry, setPendingEntry] = useState<TimeEntry | null>(null);
   const isMobile = useIsMobile();
 
   // Backfill state
@@ -123,18 +126,9 @@ export default function Track() {
         .single();
 
       if (activeEntry) {
-        setCurrentEntry(activeEntry);
-        setIsTracking(true);
-        setSelectedBranch(activeEntry.branch_id || '');
-        setSelectedActivity(activeEntry.activity_id || '');
-        setNotes(activeEntry.notes || '');
-        
-        const startTime = new Date(activeEntry.started_at);
-        const now = new Date();
-        const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000) - activeEntry.paused_seconds;
-        
-        // Set the stopwatch to the elapsed time and start it
-        reset(new Date(Date.now() - elapsedSeconds * 1000), true);
+        // Don't auto-resume, show confirmation dialog instead
+        setPendingEntry(activeEntry);
+        setShowResumeDialog(true);
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -306,6 +300,62 @@ export default function Track() {
       toast({
         title: "Fehler",
         description: error.message || "Timer konnte nicht fortgesetzt werden.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const resumeExistingEntry = () => {
+    if (!pendingEntry) return;
+
+    setCurrentEntry(pendingEntry);
+    setIsTracking(true);
+    setSelectedBranch(pendingEntry.branch_id || '');
+    setSelectedActivity(pendingEntry.activity_id || '');
+    setNotes(pendingEntry.notes || '');
+    
+    const startTime = new Date(pendingEntry.started_at);
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000) - pendingEntry.paused_seconds;
+    
+    // Set the stopwatch to the elapsed time and start it
+    reset(new Date(Date.now() - elapsedSeconds * 1000), true);
+    
+    setShowResumeDialog(false);
+    setPendingEntry(null);
+
+    toast({
+      title: "Session fortgesetzt",
+      description: "Die vorherige Zeiterfassung wurde fortgesetzt."
+    });
+  };
+
+  const discardExistingEntry = async () => {
+    if (!pendingEntry) return;
+
+    try {
+      // End the existing entry
+      const { error } = await supabase
+        .from('time_entries')
+        .update({ 
+          ended_at: new Date().toISOString(),
+          paused_seconds: pendingEntry.paused_seconds
+        })
+        .eq('id', pendingEntry.id);
+
+      if (error) throw error;
+
+      setShowResumeDialog(false);
+      setPendingEntry(null);
+
+      toast({
+        title: "Vorherige Session beendet",
+        description: "Du kannst jetzt eine neue Zeiterfassung starten."
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fehler",
+        description: error.message || "Vorherige Session konnte nicht beendet werden.",
         variant: "destructive"
       });
     }
@@ -796,6 +846,69 @@ export default function Track() {
           </CardContent>
         </Card>
       </section>
+
+      {/* Resume Dialog */}
+      {isMobile ? (
+        <Drawer open={showResumeDialog} onOpenChange={() => {}}>
+          <DrawerContent className="px-4 pb-4">
+            <DrawerHeader>
+              <DrawerTitle>Laufende Zeiterfassung gefunden</DrawerTitle>
+            </DrawerHeader>
+            
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Du hast eine laufende Zeiterfassung. Möchtest du sie fortsetzen oder eine neue starten?
+              </p>
+              
+              <div className="flex gap-2">
+                <Button 
+                  onClick={resumeExistingEntry}
+                  className="flex-1 min-touch"
+                >
+                  Fortsetzen
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={discardExistingEntry}
+                  className="flex-1 min-touch"
+                >
+                  Neue starten
+                </Button>
+              </div>
+            </div>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Dialog open={showResumeDialog} onOpenChange={() => {}}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Laufende Zeiterfassung gefunden</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Du hast eine laufende Zeiterfassung. Möchtest du sie fortsetzen oder eine neue starten?
+              </p>
+              
+              <div className="flex gap-2">
+                <Button 
+                  onClick={resumeExistingEntry}
+                  className="flex-1"
+                >
+                  Fortsetzen
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={discardExistingEntry}
+                  className="flex-1"
+                >
+                  Neue starten
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }

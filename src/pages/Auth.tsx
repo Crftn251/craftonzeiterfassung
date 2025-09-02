@@ -109,38 +109,38 @@ export default function Auth() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-xl">
+    <main className="mx-auto w-full max-w-xl p-4">
       <h1 className="sr-only">{mode === "signin" ? "Anmeldung" : "Registrierung"} – Crafton Time</h1>
-      <section className="rounded-2xl border bg-card p-6 shadow-sm">
+      <section className="rounded-xl border bg-card p-8 shadow-modern-lg">
         <header className="mb-6">
-          <h2 className="text-xl font-semibold mb-4">
+          <h2 className="text-2xl font-bold mb-4 tracking-tight">
             {mode === "signin" ? "Anmeldung" : "Konto erstellen"}
           </h2>
           <nav aria-label="Modus wechseln" className={`${isMobile ? 'grid grid-cols-2 gap-2' : 'flex gap-2'}`}>
             <Button
               type="button"
-              variant={mode === "signin" ? "default" : "secondary"}
+              variant={mode === "signin" ? "default" : "outline"}
               onClick={() => setMode("signin")}
               aria-pressed={mode === "signin"}
-              className={isMobile ? 'min-touch' : ''}
+              className={`${isMobile ? 'min-touch' : ''} transition-all duration-200`}
             >
               Anmelden
             </Button>
             <Button
               type="button"
-              variant={mode === "signup" ? "default" : "secondary"}
+              variant={mode === "signup" ? "default" : "outline"}
               onClick={() => setMode("signup")}
               aria-pressed={mode === "signup"}
-              className={isMobile ? 'min-touch' : ''}
+              className={`${isMobile ? 'min-touch' : ''} transition-all duration-200`}
             >
               Registrieren
             </Button>
           </nav>
         </header>
 
-        <form onSubmit={onSubmit} className="grid gap-4" noValidate>
+        <form onSubmit={onSubmit} className="grid gap-6" noValidate>
           <div className="grid gap-2">
-            <Label htmlFor="email">E-Mail</Label>
+            <Label htmlFor="email" className="font-medium">E-Mail</Label>
             <Input
               id="email"
               type="email"
@@ -151,12 +151,12 @@ export default function Auth() {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="du@example.com"
-              className={isMobile ? 'min-touch' : ''}
+              className={`${isMobile ? 'min-touch' : ''} transition-all duration-200 focus:shadow-modern`}
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="password">Passwort</Label>
+            <Label htmlFor="password" className="font-medium">Passwort</Label>
             <Input
               id="password"
               type="password"
@@ -166,7 +166,7 @@ export default function Auth() {
               minLength={6}
               required
               placeholder="••••••••"
-              className={isMobile ? 'min-touch' : ''}
+              className={`${isMobile ? 'min-touch' : ''} transition-all duration-200 focus:shadow-modern`}
             />
           </div>
 
@@ -174,14 +174,14 @@ export default function Auth() {
             <Button 
               type="submit" 
               disabled={loading}
-              className={isMobile ? 'w-full min-touch' : ''}
+              className={`${isMobile ? 'w-full min-touch' : ''} font-medium transition-all duration-200 hover:shadow-modern`}
             >
               {loading ? "Bitte warten…" : mode === "signin" ? "Anmelden" : "Registrieren"}
             </Button>
           </div>
         </form>
 
-        <aside className="mt-4 text-sm text-muted-foreground">
+        <aside className="mt-6 text-sm text-muted-foreground text-center">
           {mode === "signin"
             ? "Noch kein Konto? Wechsle oben zu \"Registrieren\"."
             : "Bereits registriert? Wechsle oben zu \"Anmelden\"."}

@@ -67,15 +67,16 @@ export default function AppShell() {
         </div>
       </header>
 
-      <main className="container py-6 pb-safe-nav md:pb-6">
+      <main className={`container py-6 ${user ? 'pb-safe-nav md:pb-6' : 'pb-6'}`}>
         <Outlet />
       </main>
 
       {/* Login-Dialog entfernt – bitte /login zum Anmelden verwenden */}
 
-      {/* Bottom Nav on mobile */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur pb-safe md:hidden">
-        <ul className={`grid ${user ? (isAdmin ? 'grid-cols-6' : 'grid-cols-5') : 'grid-cols-4'}`}>
+      {/* Bottom Nav on mobile - only show when logged in */}
+      {user && (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur pb-safe md:hidden">
+          <ul className={`grid ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'}`}>
           {navItems.filter(item => item.to !== '/admin' || isAdmin).map(({ to, label, icon: Icon }) => (
             <li key={to}>
               <NavLink to={to} end className={({ isActive }) => `flex flex-col items-center gap-1 py-3 px-2 text-xs min-touch ${isActive ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
@@ -85,7 +86,6 @@ export default function AppShell() {
               </NavLink>
             </li>
           ))}
-          {user ? (
             <li>
               <button 
                 onClick={() => supabase.auth.signOut()}
@@ -96,17 +96,9 @@ export default function AppShell() {
                 {isMobile && <span className="text-[10px] leading-tight">Logout</span>}
               </button>
             </li>
-          ) : (
-            <li>
-              <NavLink to="/login" className="flex flex-col items-center gap-1 py-3 px-2 text-xs text-muted-foreground min-touch">
-                <LogIn className="h-5 w-5" />
-                {!isMobile && <span>Login</span>}
-                {isMobile && <span className="text-[10px] leading-tight">Login</span>}
-              </NavLink>
-            </li>
-          )}
-        </ul>
-      </nav>
+          </ul>
+        </nav>
+      )}
     </div>
   );
 }

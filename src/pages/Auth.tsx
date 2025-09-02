@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const isMobile = useIsMobile();
 
   const pageTitle = useMemo(
     () => (mode === "signin" ? "Anmelden – Crafton Time" : "Registrieren – Crafton Time"),
@@ -110,16 +112,17 @@ export default function Auth() {
     <main className="mx-auto w-full max-w-xl">
       <h1 className="sr-only">{mode === "signin" ? "Anmeldung" : "Registrierung"} – Crafton Time</h1>
       <section className="rounded-2xl border bg-card p-6 shadow-sm">
-        <header className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">
+        <header className="mb-6">
+          <h2 className="text-xl font-semibold mb-4">
             {mode === "signin" ? "Anmeldung" : "Konto erstellen"}
           </h2>
-          <nav aria-label="Modus wechseln" className="flex gap-2">
+          <nav aria-label="Modus wechseln" className={`${isMobile ? 'grid grid-cols-2 gap-2' : 'flex gap-2'}`}>
             <Button
               type="button"
               variant={mode === "signin" ? "default" : "secondary"}
               onClick={() => setMode("signin")}
               aria-pressed={mode === "signin"}
+              className={isMobile ? 'min-touch' : ''}
             >
               Anmelden
             </Button>
@@ -128,6 +131,7 @@ export default function Auth() {
               variant={mode === "signup" ? "default" : "secondary"}
               onClick={() => setMode("signup")}
               aria-pressed={mode === "signup"}
+              className={isMobile ? 'min-touch' : ''}
             >
               Registrieren
             </Button>
@@ -147,6 +151,7 @@ export default function Auth() {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="du@example.com"
+              className={isMobile ? 'min-touch' : ''}
             />
           </div>
 
@@ -161,11 +166,16 @@ export default function Auth() {
               minLength={6}
               required
               placeholder="••••••••"
+              className={isMobile ? 'min-touch' : ''}
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button type="submit" disabled={loading}>
+          <div className={isMobile ? 'w-full' : 'flex items-center gap-2'}>
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className={isMobile ? 'w-full min-touch' : ''}
+            >
               {loading ? "Bitte warten…" : mode === "signin" ? "Anmelden" : "Registrieren"}
             </Button>
           </div>

@@ -12,6 +12,8 @@ export default function Auth() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
 
@@ -69,6 +71,14 @@ export default function Auth() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
+    if (mode === "signup" && (!firstName || !lastName)) {
+      toast({
+        title: "Pflichtfelder fehlen",
+        description: "Bitte gib Vor- und Nachname ein.",
+        variant: "destructive" as any,
+      });
+      return;
+    }
     if (mode === "signup" && password.length < 6) {
       toast({
         title: "Passwort zu kurz",
@@ -91,12 +101,16 @@ export default function Auth() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              first_name: firstName,
+              last_name: lastName,
+            },
           },
         });
         if (error) throw error;
         toast({
           title: "Bestätigungs-E-Mail gesendet",
-          description: "Bitte bestätige deine E-Mail, um dich anzumelden.",
+          description: `Hallo ${firstName}! Bitte bestätige deine E-Mail, um dich anzumelden.`,
         });
         setMode("signin");
       }
@@ -139,6 +153,38 @@ export default function Auth() {
         </header>
 
         <form onSubmit={onSubmit} className="grid gap-6" noValidate>
+          {mode === "signup" && (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="firstName" className="font-medium">Vorname</Label>
+                <Input
+                  id="firstName"
+                  type="text"
+                  autoComplete="given-name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  placeholder="Max"
+                  className={`${isMobile ? 'min-touch' : ''} transition-all duration-200 focus:shadow-modern`}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="lastName" className="font-medium">Nachname</Label>
+                <Input
+                  id="lastName"
+                  type="text"
+                  autoComplete="family-name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                  placeholder="Mustermann"
+                  className={`${isMobile ? 'min-touch' : ''} transition-all duration-200 focus:shadow-modern`}
+                />
+              </div>
+            </>
+          )}
+
           <div className="grid gap-2">
             <Label htmlFor="email" className="font-medium">E-Mail</Label>
             <Input
